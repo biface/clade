@@ -13,6 +13,9 @@
 requires      = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/hierarchy"]
+
 
 # -----------------------------------------------------------------------------
 # Project metadata
@@ -25,7 +28,7 @@ readme          = "README.md"
 license         = { file = "LICENSE.txt" }
 requires-python = ">=3.10"
 authors         = [
-    { name = "open-works", email = "fek2qe8i3@mozmail.com" },
+    { name = "open-works", email = "" },
 ]
 keywords = [
     "django",
@@ -51,7 +54,6 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# Runtime dependencies — none at this stage (pure Django add-on)
 dependencies = [
     "django>=5.2",
 ]
@@ -64,17 +66,12 @@ Mirror     = "https://github.com/open-works/hierarchy"
 
 [project.optional-dependencies]
 dev = [
-    # Lint + format
     "ruff",
-    # Type checking
     "pyright",
     "django-stubs",
-    # Security
     "bandit",
-    # Test orchestration
     "tox",
     "tox-uv",
-    # Tests
     "pytest",
     "pytest-django",
     "pytest-cov",
@@ -82,12 +79,13 @@ dev = [
 
 
 # -----------------------------------------------------------------------------
-# Ruff — lint + format (replaces flake8 + black)
+# Ruff — lint + format
 # Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.ruff]
 target-version = "py310"
 line-length    = 88
+src            = ["src"]
 
 [tool.ruff.lint]
 select = [
@@ -99,21 +97,21 @@ select = [
     "C4",   # flake8-comprehensions
     "UP",   # pyupgrade
     "DJ",   # flake8-django
-    "S",    # flake8-bandit (subset — Bandit runs separately for full audit)
+    "S",    # flake8-bandit (subset)
     "T20",  # flake8-print
     "RUF",  # Ruff-specific rules
 ]
 ignore = [
-    "S101",  # assert used in tests — acceptable
-    "DJ001", # avoid null=True on string fields — reviewed case by case
+    "S101",  # assert — acceptable in tests
+    "DJ001", # null=True on string fields — reviewed case by case
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"]  # allow assert in tests
+"tests/**/*.py" = ["S101"]
 
 [tool.ruff.format]
-quote-style             = "double"
-indent-style            = "space"
+quote-style               = "double"
+indent-style              = "space"
 skip-magic-trailing-comma = false
 
 
@@ -122,11 +120,12 @@ skip-magic-trailing-comma = false
 # Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.pyright]
+include               = ["src/hierarchy"]
 pythonVersion         = "3.10"
 typeCheckingMode      = "strict"
 djangoSettingsModule  = "tests.settings"
 reportMissingImports  = true
-reportMissingTypeStubs = false  # tolerate missing stubs for third-party libs
+reportMissingTypeStubs = false
 
 
 # -----------------------------------------------------------------------------
@@ -134,8 +133,8 @@ reportMissingTypeStubs = false  # tolerate missing stubs for third-party libs
 # Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.bandit]
-targets  = ["hierarchy"]
-skips    = ["B101"]  # assert — acceptable in production code for invariants
+targets = ["src/hierarchy"]
+skips   = ["B101"]
 
 
 # -----------------------------------------------------------------------------
@@ -147,8 +146,10 @@ DJANGO_SETTINGS_MODULE = "tests.settings"
 python_files           = ["test_*.py", "*_test.py"]
 python_classes         = ["Test*"]
 python_functions       = ["test_*"]
+testpaths              = ["tests"]
 addopts                = [
     "--strict-markers",
+    "--import-mode=importlib",
     "-v",
 ]
 
@@ -158,18 +159,18 @@ addopts                = [
 # Refs: DD-006, DD-009
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
-source   = ["hierarchy"]
-branch   = true
-omit     = [
+source = ["src/hierarchy"]
+branch = true
+omit   = [
     "*/migrations/*",
     "*/tests/*",
 ]
 
 [tool.coverage.report]
-show_missing   = true
-skip_covered   = false
-fail_under     = 80
-exclude_lines  = [
+show_missing  = true
+skip_covered  = false
+fail_under    = 80
+exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
@@ -178,96 +179,135 @@ exclude_lines  = [
 
 
 # -----------------------------------------------------------------------------
-# tox — test orchestration via tox-uv
+# tox — orchestration via tox-uv (option B: DJANGO_VERSION variable)
 # Full matrix runs on CI tag only (DD-006).
-# Locally: run a single environment or `tox` for the full matrix.
+# Local: tox -e lint,type,security  or  tox -e py312-dj52  or  tox
 # Refs: DD-006, DD-009
 # -----------------------------------------------------------------------------
 [tool.tox]
-requires  = ["tox>=4", "tox-uv"]
-env_list  = [
+requires     = ["tox>=4", "tox-uv"]
+env_list     = [
     "lint",
     "type",
     "security",
-    "test-py310-dj52",
-    "test-py311-dj52",
-    "test-py312-dj52",
-    "test-py313-dj52",
-    "test-py310-djlatest",
-    "test-py311-djlatest",
-    "test-py312-djlatest",
-    "test-py313-djlatest",
+    "py310-dj52",
+    "py311-dj52",
+    "py312-dj52",
+    "py313-dj52",
+    "py310-djlatest",
+    "py311-djlatest",
+    "py312-djlatest",
+    "py313-djlatest",
 ]
 
 [tool.tox.env_run_base]
-runner = "uv-venv-lock-runner"
+runner = "uv-venv-runner"
+setenv = { DJANGO_SETTINGS_MODULE = "tests.settings" }
 
 # --- Lint ---
 [tool.tox.env.lint]
 description = "Ruff — lint and format check"
-deps        = ["ruff"]
+deps        = ["-r .tox-config/requirements/linter.txt"]
+allowlist_externals = ["ruff"]
 commands    = [
-    ["ruff", "check", "."],
-    ["ruff", "format", "--check", "."],
+    ["ruff", "check", "src/", "tests/"],
+    ["ruff", "format", "--check", "src/", "tests/"],
 ]
 
 # --- Type checking ---
 [tool.tox.env.type]
 description = "Pyright — static type checking"
-deps        = ["pyright", "django-stubs", "django>=5.2"]
+deps        = ["-r .tox-config/requirements/type-check.txt"]
+allowlist_externals = ["pyright"]
 commands    = [["pyright"]]
 
 # --- Security ---
 [tool.tox.env.security]
 description = "Bandit — security analysis"
-deps        = ["bandit"]
-commands    = [["bandit", "-c", "pyproject.toml", "-r", "hierarchy"]]
+deps        = ["-r .tox-config/requirements/linter.txt"]
+allowlist_externals = ["bandit"]
+commands    = [["bandit", "-c", "pyproject.toml", "-r", "src/hierarchy"]]
 
-# --- Test environments ---
-[tool.tox.env."test-py310-dj52"]
-description  = "pytest — Python 3.10 × Django 5.2 LTS"
-base_python  = "python3.10"
-deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+# --- Test base (inherited by all test envs) ---
+[tool.tox.env_run_base]
+runner   = "uv-venv-runner"
+setenv   = { DJANGO_SETTINGS_MODULE = "tests.settings" }
+commands = [
+    ["pytest",
+     "--cov=src/hierarchy",
+     "--cov-report=term-missing",
+     "--cov-report=xml:{toxworkdir}/coverage.xml"],
+]
 
-[tool.tox.env."test-py311-dj52"]
-description  = "pytest — Python 3.11 × Django 5.2 LTS"
-base_python  = "python3.11"
-deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+# --- Django 5.2 LTS ---
+[tool.tox.env."py310-dj52"]
+description = "pytest — Python 3.10 × Django 5.2 LTS"
+base_python = "python3.10"
+deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."test-py312-dj52"]
-description  = "pytest — Python 3.12 × Django 5.2 LTS"
-base_python  = "python3.12"
-deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+[tool.tox.env."py311-dj52"]
+description = "pytest — Python 3.11 × Django 5.2 LTS"
+base_python = "python3.11"
+deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."test-py313-dj52"]
-description  = "pytest — Python 3.13 × Django 5.2 LTS"
-base_python  = "python3.13"
-deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+[tool.tox.env."py312-dj52"]
+description = "pytest — Python 3.12 × Django 5.2 LTS"
+base_python = "python3.12"
+deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."test-py310-djlatest"]
-description  = "pytest — Python 3.10 × Django latest"
-base_python  = "python3.10"
-deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+[tool.tox.env."py313-dj52"]
+description = "pytest — Python 3.13 × Django 5.2 LTS"
+base_python = "python3.13"
+deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."test-py311-djlatest"]
-description  = "pytest — Python 3.11 × Django latest"
-base_python  = "python3.11"
-deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+# --- Django latest ---
+[tool.tox.env."py310-djlatest"]
+description = "pytest — Python 3.10 × Django latest"
+base_python = "python3.10"
+deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
 
-[tool.tox.env."test-py312-djlatest"]
-description  = "pytest — Python 3.12 × Django latest"
-base_python  = "python3.12"
-deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+[tool.tox.env."py311-djlatest"]
+description = "pytest — Python 3.11 × Django latest"
+base_python = "python3.11"
+deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
 
-[tool.tox.env."test-py313-djlatest"]
-description  = "pytest — Python 3.13 × Django latest"
-base_python  = "python3.13"
-deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
-commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+[tool.tox.env."py312-djlatest"]
+description = "pytest — Python 3.12 × Django latest"
+base_python = "python3.12"
+deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+
+[tool.tox.env."py313-djlatest"]
+description = "pytest — Python 3.13 × Django latest"
+base_python = "python3.13"
+deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+
+# --- Coverage locale ---
+[tool.tox.env.coverage]
+description = "Generate full coverage report (HTML + XML)"
+base_python = "python3.12"
+deps        = ["-r .tox-config/requirements/base-dj52.txt"]
+allowlist_externals = ["pytest", "mkdir"]
+commands    = [
+    ["mkdir", "-p", "{toxinidir}/coverage"],
+    ["pytest",
+     "--cov=src/hierarchy",
+     "--cov-append",
+     "--cov-report=term-missing",
+     "--cov-report=xml:{toxinidir}/coverage/coverage.xml",
+     "--cov-report=html:{toxinidir}/coverage/coverage_html"],
+]
+
+# --- Pre-push local workflow ---
+[tool.tox.env.pre-push]
+description = "Full local workflow before push (quality + tests + coverage)"
+deps        = ["-r .tox-config/requirements/full.txt"]
+allowlist_externals = ["ruff", "pyright", "bandit", "bash"]
+passenv     = ["HOME", "USER"]
+commands    = [
+    ["ruff", "check", "src/", "tests/"],
+    ["ruff", "format", "--check", "src/", "tests/"],
+    ["pyright"],
+    ["bandit", "-c", "pyproject.toml", "-r", "src/hierarchy"],
+    ["bash", "{toxinidir}/.tox-config/scripts/test.sh"],
+    ["bash", "{toxinidir}/.tox-config/scripts/coverage.sh"],
+]
