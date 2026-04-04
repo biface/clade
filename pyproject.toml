@@ -1,0 +1,273 @@
+# =============================================================================
+# pyproject.toml — Hierarchy project
+# Single configuration file for packaging, toolchain and test orchestration.
+#
+# Refs: DD-007 (SemVer), DD-008 (Django add-on), DD-009 (toolchain)
+# GitLab: #7, #8, #9
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Build system
+# -----------------------------------------------------------------------------
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+# -----------------------------------------------------------------------------
+# Project metadata
+# -----------------------------------------------------------------------------
+[project]
+name            = "hierarchy"
+version         = "0.0.5"
+description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
+readme          = "README.md"
+license         = { file = "LICENSE.txt" }
+requires-python = ">=3.10"
+authors         = [
+    { name = "open-works", email = "fek2qe8i3@mozmail.com" },
+]
+keywords = [
+    "django",
+    "hierarchy",
+    "tree",
+    "ltree",
+    "kinship",
+    "adjacency",
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+# Runtime dependencies — none at this stage (pure Django add-on)
+dependencies = [
+    "django>=5.2",
+]
+
+[project.urls]
+Repository = "https://gitlab.com/open-works/hierarchy"
+Issues     = "https://gitlab.com/open-works/hierarchy/-/issues"
+Changelog  = "https://gitlab.com/open-works/hierarchy/-/blob/main/CHANGELOG.md"
+Mirror     = "https://github.com/open-works/hierarchy"
+
+[project.optional-dependencies]
+dev = [
+    # Lint + format
+    "ruff",
+    # Type checking
+    "pyright",
+    "django-stubs",
+    # Security
+    "bandit",
+    # Test orchestration
+    "tox",
+    "tox-uv",
+    # Tests
+    "pytest",
+    "pytest-django",
+    "pytest-cov",
+]
+
+
+# -----------------------------------------------------------------------------
+# Ruff — lint + format (replaces flake8 + black)
+# Refs: DD-009
+# -----------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py310"
+line-length    = 88
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "DJ",   # flake8-django
+    "S",    # flake8-bandit (subset — Bandit runs separately for full audit)
+    "T20",  # flake8-print
+    "RUF",  # Ruff-specific rules
+]
+ignore = [
+    "S101",  # assert used in tests — acceptable
+    "DJ001", # avoid null=True on string fields — reviewed case by case
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]  # allow assert in tests
+
+[tool.ruff.format]
+quote-style             = "double"
+indent-style            = "space"
+skip-magic-trailing-comma = false
+
+
+# -----------------------------------------------------------------------------
+# Pyright — type checking
+# Refs: DD-009
+# -----------------------------------------------------------------------------
+[tool.pyright]
+pythonVersion         = "3.10"
+typeCheckingMode      = "strict"
+djangoSettingsModule  = "tests.settings"
+reportMissingImports  = true
+reportMissingTypeStubs = false  # tolerate missing stubs for third-party libs
+
+
+# -----------------------------------------------------------------------------
+# Bandit — security analysis
+# Refs: DD-009
+# -----------------------------------------------------------------------------
+[tool.bandit]
+targets  = ["hierarchy"]
+skips    = ["B101"]  # assert — acceptable in production code for invariants
+
+
+# -----------------------------------------------------------------------------
+# pytest
+# Refs: DD-006, DD-009
+# -----------------------------------------------------------------------------
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files           = ["test_*.py", "*_test.py"]
+python_classes         = ["Test*"]
+python_functions       = ["test_*"]
+addopts                = [
+    "--strict-markers",
+    "-v",
+]
+
+
+# -----------------------------------------------------------------------------
+# Coverage
+# Refs: DD-006, DD-009
+# -----------------------------------------------------------------------------
+[tool.coverage.run]
+source   = ["hierarchy"]
+branch   = true
+omit     = [
+    "*/migrations/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing   = true
+skip_covered   = false
+fail_under     = 80
+exclude_lines  = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+
+# -----------------------------------------------------------------------------
+# tox — test orchestration via tox-uv
+# Full matrix runs on CI tag only (DD-006).
+# Locally: run a single environment or `tox` for the full matrix.
+# Refs: DD-006, DD-009
+# -----------------------------------------------------------------------------
+[tool.tox]
+requires  = ["tox>=4", "tox-uv"]
+env_list  = [
+    "lint",
+    "type",
+    "security",
+    "test-py310-dj52",
+    "test-py311-dj52",
+    "test-py312-dj52",
+    "test-py313-dj52",
+    "test-py310-djlatest",
+    "test-py311-djlatest",
+    "test-py312-djlatest",
+    "test-py313-djlatest",
+]
+
+[tool.tox.env_run_base]
+runner = "uv-venv-lock-runner"
+
+# --- Lint ---
+[tool.tox.env.lint]
+description = "Ruff — lint and format check"
+deps        = ["ruff"]
+commands    = [
+    ["ruff", "check", "."],
+    ["ruff", "format", "--check", "."],
+]
+
+# --- Type checking ---
+[tool.tox.env.type]
+description = "Pyright — static type checking"
+deps        = ["pyright", "django-stubs", "django>=5.2"]
+commands    = [["pyright"]]
+
+# --- Security ---
+[tool.tox.env.security]
+description = "Bandit — security analysis"
+deps        = ["bandit"]
+commands    = [["bandit", "-c", "pyproject.toml", "-r", "hierarchy"]]
+
+# --- Test environments ---
+[tool.tox.env."test-py310-dj52"]
+description  = "pytest — Python 3.10 × Django 5.2 LTS"
+base_python  = "python3.10"
+deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py311-dj52"]
+description  = "pytest — Python 3.11 × Django 5.2 LTS"
+base_python  = "python3.11"
+deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py312-dj52"]
+description  = "pytest — Python 3.12 × Django 5.2 LTS"
+base_python  = "python3.12"
+deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py313-dj52"]
+description  = "pytest — Python 3.13 × Django 5.2 LTS"
+base_python  = "python3.13"
+deps         = ["django~=5.2", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py310-djlatest"]
+description  = "pytest — Python 3.10 × Django latest"
+base_python  = "python3.10"
+deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py311-djlatest"]
+description  = "pytest — Python 3.11 × Django latest"
+base_python  = "python3.11"
+deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py312-djlatest"]
+description  = "pytest — Python 3.12 × Django latest"
+base_python  = "python3.12"
+deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
+
+[tool.tox.env."test-py313-djlatest"]
+description  = "pytest — Python 3.13 × Django latest"
+base_python  = "python3.13"
+deps         = ["django", "pytest", "pytest-django", "pytest-cov"]
+commands     = [["pytest", "--cov=hierarchy", "--cov-report=term-missing"]]
