@@ -1,0 +1,9 @@
+# =============================================================================
+# .tox-config/coverage-version.txt — Hierarchy project
+# =============================================================================
+# Version Python utilisée pour générer le rapport de couverture.
+# Une seule version active (première ligne non commentée).
+# Doit correspondre à un environnement défini dans pyproject.toml.
+# =============================================================================
+
+py312-dj52

@@ -1,0 +1,3 @@
+pyright
+django-stubs
+django>=5.2

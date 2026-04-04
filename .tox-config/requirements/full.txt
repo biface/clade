@@ -1,0 +1,10 @@
+ruff
+bandit
+pyright
+django-stubs
+pytest
+pytest-django
+pytest-cov
+django~=5.2
+tox
+tox-uv
