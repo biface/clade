@@ -201,8 +201,14 @@ env_list     = [
 ]
 
 [tool.tox.env_run_base]
-runner = "uv-venv-runner"
-setenv = { DJANGO_SETTINGS_MODULE = "tests.settings" }
+runner   = "uv-venv-runner"
+setenv   = { DJANGO_SETTINGS_MODULE = "tests.settings" }
+commands = [
+    ["pytest",
+     "--cov=src/hierarchy",
+     "--cov-report=term-missing",
+     "--cov-report=xml:{toxworkdir}/coverage.xml"],
+]
 
 # --- Lint ---
 [tool.tox.env.lint]
@@ -227,17 +233,6 @@ description = "Bandit — security analysis"
 deps        = ["-r .tox-config/requirements/linter.txt"]
 allowlist_externals = ["bandit"]
 commands    = [["bandit", "-c", "pyproject.toml", "-r", "src/hierarchy"]]
-
-# --- Test base (inherited by all test envs) ---
-[tool.tox.env_run_base]
-runner   = "uv-venv-runner"
-setenv   = { DJANGO_SETTINGS_MODULE = "tests.settings" }
-commands = [
-    ["pytest",
-     "--cov=src/hierarchy",
-     "--cov-report=term-missing",
-     "--cov-report=xml:{toxworkdir}/coverage.xml"],
-]
 
 # --- Django 5.2 LTS ---
 [tool.tox.env."py310-dj52"]
