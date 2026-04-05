@@ -1,4 +1,4 @@
-# Contribuer à Hierarchy
+# Contribuer à Clade
 
 Merci de votre intérêt pour le projet. Ce document explique comment configurer
 l'environnement de développement et soumettre des modifications.
@@ -18,8 +18,8 @@ l'environnement de développement et soumettre des modifications.
 ## Mise en place de l'environnement
 
 ```bash
-git clone git@gitlab.com:open-works/hierarchy.git
-cd hierarchy
+git clone git@gitlab.com:open-works/clade.git
+cd clade
 uv venv
 uv pip install -e ".[dev]"
 ```
@@ -87,7 +87,7 @@ Types : `feat`, `fix`, `docs`, `chore`, `ci`, `test`, `refactor`, `perf`, `style
 ## Décisions de conception
 
 Les choix architecturaux significatifs sont documentés dans
-les [issues DD sur GitLab](https://gitlab.com/open-works/hierarchy/-/issues?label_name=type%3A+decision) sous forme de fiches numérotées `DD-xxx`.
+les [issues DD sur GitLab](https://gitlab.com/open-works/clade/-/issues?label_name=type%3A+decision) sous forme de fiches numérotées `DD-xxx`.
 Si votre contribution implique un choix architectural, ouvrez d'abord une issue
 `type: decision` et référencez-la dans votre merge request.
 

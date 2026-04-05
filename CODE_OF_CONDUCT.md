@@ -2,9 +2,9 @@
 
 ## Scope
 
-This code of conduct applies to anyone who participates in the **Hierarchy** project
+This code of conduct applies to anyone who participates in the **Clade** project
 or who speaks publicly about it — in the GitLab repository, in issues, in merge requests,
-in discussions, and in any public space where Hierarchy is a subject.
+in discussions, and in any public space where Clade is a subject.
 
 ## What we expect
 

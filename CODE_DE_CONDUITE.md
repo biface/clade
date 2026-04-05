@@ -2,9 +2,9 @@
 
 ## Portée
 
-Ce code de conduite s'applique à toute personne qui participe au projet **Hierarchy** ou
+Ce code de conduite s'applique à toute personne qui participe au projet **Clade** ou
 qui s'exprime publiquement à son sujet — dans le dépôt GitLab, les issues, les merge
-requests, les discussions, et dans tout espace public où Hierarchy est le sujet.
+requests, les discussions, et dans tout espace public où Clade est le sujet.
 
 ## Ce que nous attendons
 

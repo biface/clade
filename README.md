@@ -1,11 +1,11 @@
-# Hierarchy
+# Clade
 
 > A Django module for managing hierarchical data models through a tree of nodes,
 > with kinship relationship queries and optional database-native optimisations.
 
-[![pipeline status](https://gitlab.com/open-works/hierarchy/badges/main/pipeline.svg)](https://gitlab.com/open-works/hierarchy/-/pipelines)
-[![coverage](https://codecov.io/gl/open-works/hierarchy/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/hierarchy)
-[![PyPI](https://img.shields.io/pypi/v/hierarchy)](https://pypi.org/project/hierarchy/)
+[![pipeline status](https://gitlab.com/open-works/clade/badges/main/pipeline.svg)](https://gitlab.com/open-works/clade/-/pipelines)
+[![coverage](https://codecov.io/gl/open-works/clade/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/clade)
+[![PyPI](https://img.shields.io/pypi/v/clade)](https://pypi.org/project/clade/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.txt)
 
 ---
@@ -14,13 +14,13 @@
 
 **Pre-development** — `v0.0.5` in progress. Not yet usable.
 
-See the [milestones](https://gitlab.com/open-works/hierarchy/-/milestones) and [open issues](https://gitlab.com/open-works/hierarchy/-/issues) on GitLab for the full roadmap.
+See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and [open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the full roadmap.
 
 ---
 
 ## What it does
 
-**Hierarchy** provides a Django application for modelling and querying tree-structured
+**Clade** provides a Django application for modelling and querying tree-structured
 data. It exposes the full set of kinship relationships derivable from a node tree —
 not only parent/child pairs, but ancestors, descendants, siblings, and collateral
 lines (piblings, niblings, cousins…) — using gender-neutral terminology throughout.
@@ -39,14 +39,14 @@ The module targets multiple database backends:
 > Not yet published. Instructions will be added at `v0.1.0`.
 
 ```bash
-pip install hierarchy          # future
+pip install clade          # future
 ```
 
 ```python
 # settings.py
 INSTALLED_APPS = [
     ...
-    "hierarchy",
+    "clade",
 ]
 ```
 

@@ -18,9 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitLab labels, milestones, and issue/MR templates
 - CI pipeline skeleton (lint, type, security, test)
 - `pyproject.toml` with full toolchain configuration (Ruff, Pyright, Bandit, tox, uv)
-- Design decisions DD-001 to DD-009 documented as [GitLab issues](https://gitlab.com/open-works/hierarchy/-/issues?label_name=type%3A+decision)
+- Design decisions DD-001 to DD-009 documented as [GitLab issues](https://gitlab.com/open-works/clade/-/issues?label_name=type%3A+decision)
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/hierarchy/-/compare/v0.0.5...HEAD
-[0.0.5]: https://gitlab.com/open-works/hierarchy/-/releases/v0.0.5
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.0.5...HEAD
+[0.0.5]: https://gitlab.com/open-works/clade/-/releases/v0.0.5

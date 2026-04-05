@@ -1,12 +1,12 @@
-# Hierarchy
+# Clade
 
 > Un module Django pour la gestion de modèles de données hiérarchiques sous forme
 > d'arbre de nœuds, avec des requêtes de parenté et des optimisations natives
 > selon le moteur de base de données.
 
-[![statut pipeline](https://gitlab.com/open-works/hierarchy/badges/main/pipeline.svg)](https://gitlab.com/open-works/hierarchy/-/pipelines)
-[![couverture](https://codecov.io/gl/open-works/hierarchy/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/hierarchy)
-[![PyPI](https://img.shields.io/pypi/v/hierarchy)](https://pypi.org/project/hierarchy/)
+[![statut pipeline](https://gitlab.com/open-works/clade/badges/main/pipeline.svg)](https://gitlab.com/open-works/clade/-/pipelines)
+[![couverture](https://codecov.io/gl/open-works/clade/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/clade)
+[![PyPI](https://img.shields.io/pypi/v/clade)](https://pypi.org/project/clade/)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue.svg)](LICENSE.txt)
 
 ---
@@ -15,13 +15,13 @@
 
 **Pré-développement** — `v0.0.5` en cours. Pas encore utilisable.
 
-Voir les [jalons](https://gitlab.com/open-works/hierarchy/-/milestones) et les [issues](https://gitlab.com/open-works/hierarchy/-/issues) sur GitLab pour la feuille de route complète.
+Voir les [jalons](https://gitlab.com/open-works/clade/-/milestones) et les [issues](https://gitlab.com/open-works/clade/-/issues) sur GitLab pour la feuille de route complète.
 
 ---
 
 ## Ce que ça fait
 
-**Hierarchy** fournit une application Django pour modéliser et interroger des données
+**Clade** fournit une application Django pour modéliser et interroger des données
 structurées en arbre. Il expose l'ensemble des relations de parenté dérivables d'un
 arbre de nœuds — pas seulement les paires parent/enfant, mais aussi les ascendants,
 descendants, fratrie et lignes collatérales (piblings, niblings, cousins…) — avec
@@ -41,14 +41,14 @@ Le module cible plusieurs moteurs de base de données :
 > Pas encore publié. Les instructions seront ajoutées à `v0.1.0`.
 
 ```bash
-pip install hierarchy          # futur
+pip install clade          # futur
 ```
 
 ```python
 # settings.py
 INSTALLED_APPS = [
     ...,
-    "hierarchy",
+    "clade",
 ]
 ```
 
