@@ -14,14 +14,14 @@ requires      = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hierarchy"]
+packages = ["src/clade"]
 
 
 # -----------------------------------------------------------------------------
 # Project metadata
 # -----------------------------------------------------------------------------
 [project]
-name            = "hierarchy"
+name            = "clade"
 version         = "0.0.5"
 description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
 readme          = "README.md"
@@ -33,6 +33,7 @@ authors         = [
 keywords = [
     "django",
     "hierarchy",
+    "clade",
     "tree",
     "ltree",
     "kinship",
@@ -59,10 +60,10 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://gitlab.com/open-works/hierarchy"
-Issues     = "https://gitlab.com/open-works/hierarchy/-/issues"
-Changelog  = "https://gitlab.com/open-works/hierarchy/-/blob/main/CHANGELOG.md"
-Mirror     = "https://github.com/open-works/hierarchy"
+Repository = "https://gitlab.com/open-works/clade"
+Issues     = "https://gitlab.com/open-works/clade/-/issues"
+Changelog  = "https://gitlab.com/open-works/clade/-/blob/main/CHANGELOG.md"
+Mirror     = "https://github.com/open-works/clade"
 
 [project.optional-dependencies]
 dev = [
@@ -120,7 +121,7 @@ skip-magic-trailing-comma = false
 # Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.pyright]
-include               = ["src/hierarchy"]
+include               = ["src/clade"]
 pythonVersion         = "3.10"
 typeCheckingMode      = "strict"
 djangoSettingsModule  = "tests.settings"
@@ -133,7 +134,7 @@ reportMissingTypeStubs = false
 # Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.bandit]
-targets = ["src/hierarchy"]
+targets = ["src/clade"]
 skips   = ["B101"]
 
 
@@ -159,7 +160,7 @@ addopts                = [
 # Refs: DD-006, DD-009
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
-source = ["src/hierarchy"]
+source = ["src/clade"]
 branch = true
 omit   = [
     "*/migrations/*",
@@ -205,7 +206,7 @@ runner   = "uv-venv-runner"
 setenv   = { DJANGO_SETTINGS_MODULE = "tests.settings" }
 commands = [
     ["pytest",
-     "--cov=src/hierarchy",
+     "--cov=src/clade",
      "--cov-report=term-missing",
      "--cov-report=xml:{toxworkdir}/coverage.xml"],
 ]
@@ -232,7 +233,7 @@ commands    = [["pyright"]]
 description = "Bandit — security analysis"
 deps        = ["-r .tox-config/requirements/linter.txt"]
 allowlist_externals = ["bandit"]
-commands    = [["bandit", "-c", "pyproject.toml", "-r", "src/hierarchy"]]
+commands    = [["bandit", "-c", "pyproject.toml", "-r", "src/clade"]]
 
 # --- Django 5.2 LTS ---
 [tool.tox.env."py310-dj52"]
@@ -285,7 +286,7 @@ allowlist_externals = ["pytest", "mkdir"]
 commands    = [
     ["mkdir", "-p", "{toxinidir}/coverage"],
     ["pytest",
-     "--cov=src/hierarchy",
+     "--cov=src/clade",
      "--cov-append",
      "--cov-report=term-missing",
      "--cov-report=xml:{toxinidir}/coverage/coverage.xml",
@@ -302,7 +303,7 @@ commands    = [
     ["ruff", "check", "src/", "tests/"],
     ["ruff", "format", "--check", "src/", "tests/"],
     ["pyright"],
-    ["bandit", "-c", "pyproject.toml", "-r", "src/hierarchy"],
+    ["bandit", "-c", "pyproject.toml", "-r", "src/clade"],
     ["bash", "{toxinidir}/.tox-config/scripts/test.sh"],
     ["bash", "{toxinidir}/.tox-config/scripts/coverage.sh"],
 ]
