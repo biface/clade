@@ -21,14 +21,14 @@ packages = ["src/clade"]
 # Project metadata
 # -----------------------------------------------------------------------------
 [project]
-name            = "clade"
-version         = "0.0.5"
+name            = "django-clade"
+version         = "0.0.5-1"
 description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
 readme          = "README.md"
 license         = { file = "LICENSE.txt" }
 requires-python = ">=3.10"
 authors         = [
-    { name = "open-works", email = "" },
+    { name = "biface", email = "fek2qe8i3@mozmail.com" },
 ]
 keywords = [
     "django",
