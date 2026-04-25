@@ -1,11 +1,9 @@
 # =============================================================================
-# .gitlab-ci.yml — Hierarchy project
+# .gitlab-ci.yml — django-clade project
 #
-# Jobs:
-#   lint     — Ruff (every push)
-#   type     — Pyright (every push)
-#   security — Bandit (every push)
-#   test     — pytest + pytest-cov, full matrix (tag push only)
+# Stages:
+#   quality  — lint, type, security (every push)
+#   test     — pytest full matrix + codecov upload (tag push only)
 #
 # Refs: DD-006 (test strategy), DD-009 (toolchain)
 # GitLab: #6, #9
@@ -35,6 +33,7 @@ stages:
 
 # -----------------------------------------------------------------------------
 # Shared setup — install uv and the project dev dependencies
+# Used by quality jobs via YAML anchor <<: *setup
 # -----------------------------------------------------------------------------
 .setup: &setup
   before_script:
@@ -76,7 +75,15 @@ security:
 
 # -----------------------------------------------------------------------------
 # Test stage — tag push only (DD-006)
-# Full matrix: Python 3.10–3.13 × Django 5.2 LTS + Django latest
+# Full matrix: Python 3.10–3.13 × Django 5.2 LTS
+#
+# Each job:
+#   1. Installs uv and the pinned Django version
+#   2. Runs pytest with coverage (exit code 5 = no tests collected, allowed)
+#   3. Uploads the coverage report to codecov.io via codecov-cli
+#
+# Required CI variable (project scope, masked):
+#   CODECOV_TOKEN — repository token from codecov.io
 # -----------------------------------------------------------------------------
 .test_base:
   stage: test
@@ -88,7 +95,6 @@ security:
     - uv pip install -e . --quiet
     - pytest --cov=src/clade --cov-report=term-missing --cov-report=xml || [ $? -eq 5 ]
     - pip install codecov-cli --quiet
-    - echo "CODECOV_TOKEN length=${#CODECOV_TOKEN}"
     - codecovcli upload-process --file coverage.xml --flag unittests --git-service gitlab
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
@@ -100,7 +106,7 @@ security:
   rules:
     - if: $CI_COMMIT_TAG
 
-# Django 5.2 LTS
+# Django 5.2 LTS — active (v0.1.0 → v0.8.0)
 test-py310-dj52:
   extends: .test_base
   image: python:3.10-slim
@@ -125,8 +131,8 @@ test-py313-dj52:
   variables:
     DJANGO_VERSION: "~=5.2"
 
-# Django 6.0+ — activated at v0.9.0 (transition phase)
-# Uncomment at v0.9.0:
+# Django 6.0+ — activate at v0.9.0 (transition phase, DD-009)
+# Uncomment the three jobs below at v0.9.0:
 #
 # test-py312-djlatest:
 #   extends: .test_base
