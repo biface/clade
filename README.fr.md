@@ -6,7 +6,7 @@
 
 [![statut pipeline](https://gitlab.com/open-works/clade/badges/main/pipeline.svg)](https://gitlab.com/open-works/clade/-/pipelines)
 [![couverture](https://codecov.io/gl/open-works/clade/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/clade)
-[![PyPI](https://img.shields.io/pypi/v/django-clade)](https://pypi.org/project/django-clade/)
+[![PyPI](https://img.shields.io/pypi/v/clade)](https://pypi.org/project/clade/)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue.svg)](LICENSE.txt)
 
 ---
