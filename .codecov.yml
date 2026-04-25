@@ -1,0 +1,92 @@
+# =============================================================================
+# .codecov.yml — Clade project
+# Coverage reporting configuration for codecov.io
+#
+# Validate: curl -X POST --data-binary @.codecov.yml https://codecov.io/validate
+#
+# Refs: DD-006 (test strategy), DD-009 (toolchain)
+# GitLab: #6, #9
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Coverage targets
+# -----------------------------------------------------------------------------
+coverage:
+  precision: 2
+  round: down
+  status:
+    project:
+      default:
+        target: 80%          # minimum acceptable project coverage (DD-006)
+        threshold: 1%        # allow 1% drop before reporting a failure
+    patch:
+      default:
+        target: 80%          # new code in each MR must meet the same target
+        threshold: 1%
+
+# -----------------------------------------------------------------------------
+# Components — coverage by conceptual area (DD-001 to DD-004)
+# Paths will be populated as the module grows.
+# -----------------------------------------------------------------------------
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: 80%
+        threshold: 1%
+
+  individual_components:
+
+    - component_id: node_tree
+      name: "Node Tree"          # DD-001 — core tree model
+      paths:
+        - "src/clade/models/**"
+        - "src/clade/tree/**"
+
+    - component_id: kinship
+      name: "Kinship queries"    # DD-002 — parent, sibling, pibling, nibling…
+      paths:
+        - "src/clade/kinship/**"
+        - "src/clade/relations/**"
+
+    - component_id: backends
+      name: "Backends"           # DD-003 — ltree + fallback
+      paths:
+        - "src/clade/backends/**"
+
+    - component_id: affinity
+      name: "Affinity"           # DD-004 — lateral shared-attribute grouping
+      paths:
+        - "src/clade/affinity/**"
+
+# -----------------------------------------------------------------------------
+# Flags — by test type
+# -----------------------------------------------------------------------------
+flags:
+  unittests:
+    paths:
+      - src/clade/
+    carryforward: true
+
+# -----------------------------------------------------------------------------
+# Ignored paths
+# -----------------------------------------------------------------------------
+ignore:
+  - "src/clade/migrations/**"
+  - "tests/**"
+  - "docs/**"
+
+# -----------------------------------------------------------------------------
+# MR comments
+# -----------------------------------------------------------------------------
+comment:
+  layout: "reach,diff,components,flags,files"
+  behavior: default
+  require_changes: true
+
+# -----------------------------------------------------------------------------
+# Codecov behaviour
+# -----------------------------------------------------------------------------
+codecov:
+  notify:
+    after_n_builds: 4    # 4 active jobs: py310-313 × dj52 (djlatest activated at v0.9.0)
