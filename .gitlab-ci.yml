@@ -86,7 +86,10 @@ security:
     - source .venv/bin/activate
     - uv pip install django${DJANGO_VERSION} pytest pytest-django pytest-cov --quiet
     - uv pip install -e . --quiet
-    - pytest --cov=src/clade --cov-report=term-missing --cov-report=xml
+    - pytest --cov=src/clade --cov-report=term-missing --cov-report=xml || [ $? -eq 5 ]
+    - pip install codecov-cli --quiet
+    - echo "CODECOV_TOKEN length=${#CODECOV_TOKEN}"
+    - codecovcli upload-process --file coverage.xml --flag unittests --git-service gitlab
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
