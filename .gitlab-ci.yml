@@ -69,7 +69,7 @@ security:
   stage: quality
   <<: *setup
   script:
-    - bandit -c pyproject.toml -r hierarchy
+    - bandit -c pyproject.toml -r src/clade
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
@@ -86,7 +86,7 @@ security:
     - source .venv/bin/activate
     - uv pip install django${DJANGO_VERSION} pytest pytest-django pytest-cov --quiet
     - uv pip install -e . --quiet
-    - pytest --cov=hierarchy --cov-report=term-missing --cov-report=xml
+    - pytest --cov=src/clade --cov-report=term-missing --cov-report=xml
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
@@ -122,27 +122,23 @@ test-py313-dj52:
   variables:
     DJANGO_VERSION: "~=5.2"
 
-# Django latest
-test-py310-djlatest:
-  extends: .test_base
-  image: python:3.10-slim
-  variables:
-    DJANGO_VERSION: ""
-
-test-py311-djlatest:
-  extends: .test_base
-  image: python:3.11-slim
-  variables:
-    DJANGO_VERSION: ""
-
-test-py312-djlatest:
-  extends: .test_base
-  image: python:3.12-slim
-  variables:
-    DJANGO_VERSION: ""
-
-test-py313-djlatest:
-  extends: .test_base
-  image: python:3.13-slim
-  variables:
-    DJANGO_VERSION: ""
+# Django 6.0+ — activated at v0.9.0 (transition phase)
+# Uncomment at v0.9.0:
+#
+# test-py312-djlatest:
+#   extends: .test_base
+#   image: python:3.12-slim
+#   variables:
+#     DJANGO_VERSION: ">=6.0"
+#
+# test-py313-djlatest:
+#   extends: .test_base
+#   image: python:3.13-slim
+#   variables:
+#     DJANGO_VERSION: ">=6.0"
+#
+# test-py314-djlatest:
+#   extends: .test_base
+#   image: python:3.14-slim
+#   variables:
+#     DJANGO_VERSION: ">=6.0"

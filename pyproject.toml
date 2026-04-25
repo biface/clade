@@ -3,7 +3,10 @@
 # Single configuration file for packaging, toolchain and test orchestration.
 #
 # Refs: DD-007 (SemVer), DD-008 (Django add-on), DD-009 (toolchain)
-# GitLab: #7, #8, #9
+# GitLab:
+#  https://gitlab.com/open-works/clade/-/work_items/6
+#  https://gitlab.com/open-works/clade/-/work_items/7
+#  https://gitlab.com/open-works/clade/-/work_items/9
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -22,17 +25,16 @@ packages = ["src/clade"]
 # -----------------------------------------------------------------------------
 [project]
 name            = "django-clade"
-version         = "0.0.5-1"
+version         = "0.0.5"
 description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
 readme          = "README.md"
 license         = { file = "LICENSE.txt" }
 requires-python = ">=3.10"
 authors         = [
-    { name = "biface", email = "fek2qe8i3@mozmail.com" },
+    { name = "open-works", email = "" },
 ]
 keywords = [
     "django",
-    "hierarchy",
     "clade",
     "tree",
     "ltree",
@@ -51,6 +53,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
@@ -81,7 +84,7 @@ dev = [
 
 # -----------------------------------------------------------------------------
 # Ruff — lint + format
-# Refs: DD-009
+# Refs: https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.ruff]
 target-version = "py310"
@@ -109,6 +112,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
+"tests/settings.py" = ["S105"]
 
 [tool.ruff.format]
 quote-style               = "double"
@@ -118,7 +122,7 @@ skip-magic-trailing-comma = false
 
 # -----------------------------------------------------------------------------
 # Pyright — type checking
-# Refs: DD-009
+# Refs: https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.pyright]
 include               = ["src/clade"]
@@ -131,7 +135,7 @@ reportMissingTypeStubs = false
 
 # -----------------------------------------------------------------------------
 # Bandit — security analysis
-# Refs: DD-009
+# Refs: https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.bandit]
 targets = ["src/clade"]
@@ -140,13 +144,16 @@ skips   = ["B101"]
 
 # -----------------------------------------------------------------------------
 # pytest
-# Refs: DD-006, DD-009
+# Refs: 
+#  https://gitlab.com/open-works/clade/-/work_items/6
+#  https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
 python_files           = ["test_*.py", "*_test.py"]
 python_classes         = ["Test*"]
 python_functions       = ["test_*"]
+pythonpath             = ["."]
 testpaths              = ["tests"]
 addopts                = [
     "--strict-markers",
@@ -157,7 +164,9 @@ addopts                = [
 
 # -----------------------------------------------------------------------------
 # Coverage
-# Refs: DD-006, DD-009
+# Refs: 
+#  https://gitlab.com/open-works/clade/-/work_items/6
+#  https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
 source = ["src/clade"]
@@ -181,9 +190,11 @@ exclude_lines = [
 
 # -----------------------------------------------------------------------------
 # tox — orchestration via tox-uv (option B: DJANGO_VERSION variable)
-# Full matrix runs on CI tag only (DD-006).
+# Full matrix runs on CI tag only.
 # Local: tox -e lint,type,security  or  tox -e py312-dj52  or  tox
-# Refs: DD-006, DD-009
+# Refs: 
+#  https://gitlab.com/open-works/clade/-/work_items/6
+#  https://gitlab.com/open-works/clade/-/work_items/9
 # -----------------------------------------------------------------------------
 [tool.tox]
 requires     = ["tox>=4", "tox-uv"]
@@ -191,14 +202,15 @@ env_list     = [
     "lint",
     "type",
     "security",
+    # Django 5.2 LTS — active (v0.1.0 → v0.8.0)
     "py310-dj52",
     "py311-dj52",
     "py312-dj52",
     "py313-dj52",
-    "py310-djlatest",
-    "py311-djlatest",
-    "py312-djlatest",
-    "py313-djlatest",
+    # Django 6.0+ — activate at v0.9.0 (transition phase)
+    # "py312-djlatest",
+    # "py313-djlatest",
+    # "py314-djlatest",
 ]
 
 [tool.tox.env_run_base]
@@ -257,24 +269,20 @@ base_python = "python3.13"
 deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
 # --- Django latest ---
-[tool.tox.env."py310-djlatest"]
-description = "pytest — Python 3.10 × Django latest"
-base_python = "python3.10"
-deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
-
-[tool.tox.env."py311-djlatest"]
-description = "pytest — Python 3.11 × Django latest"
-base_python = "python3.11"
-deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
-
+# Django 6.0+ does not support Python 3.10 or 3.11
 [tool.tox.env."py312-djlatest"]
-description = "pytest — Python 3.12 × Django latest"
+description = "pytest — Python 3.12 × Django latest (6.0+)"
 base_python = "python3.12"
 deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
 
 [tool.tox.env."py313-djlatest"]
-description = "pytest — Python 3.13 × Django latest"
+description = "pytest — Python 3.13 × Django latest (6.0+)"
 base_python = "python3.13"
+deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+
+[tool.tox.env."py314-djlatest"]
+description = "pytest — Python 3.14 × Django latest (6.0+)"
+base_python = "python3.14"
 deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
 
 # --- Coverage locale ---

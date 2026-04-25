@@ -12,14 +12,14 @@
 # Pas besoin de modifier pyproject.toml.
 # =============================================================================
 
-# Django 5.2 LTS
+# Django 5.2 LTS — active (v0.1.0 → v0.8.0)
 py310-dj52
 py311-dj52
 py312-dj52
 py313-dj52
 
-# Django latest
-py310-djlatest
-py311-djlatest
-py312-djlatest
-py313-djlatest
+# Django 6.0+ — activated at v0.9.0 (transition phase)
+# Uncomment when ready:
+# py312-djlatest
+# py313-djlatest
+# py314-djlatest
