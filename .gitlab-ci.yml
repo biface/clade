@@ -12,7 +12,7 @@
 # =============================================================================
 
 default:
-  image: python:3.12-slim
+  image: python:3.12
 
 variables:
   UV_VERSION: "latest"
