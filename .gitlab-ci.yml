@@ -1,153 +1,383 @@
 # =============================================================================
-# .gitlab-ci.yml — django-clade project
+# .gitlab-ci.yml — CI/CD pipeline for django-clade
+# =============================================================================
 #
-# Stages:
-#   quality  — lint, type, security (every push)
-#   test     — pytest full matrix + codecov upload (tag push only)
+# Pipeline structure
+# ──────────────────
+#   quality   Lint, type-check, security analysis    every push + MR
+#   test      pytest matrix (Django 5.2 × py310–313) every push + MR, after quality
+#   build     version check + package build           version tags only, after quality + test
+#   publish   TestPyPI (rc tags) / PyPI (final tags)  after build
 #
-# Refs: DD-006 (test strategy), DD-009 (toolchain)
-# GitLab: #6, #9
+# Release creation (DD-010 Stage 1): manual via GitLab UI.
+# Automated release-cli job deferred to Stage 2 (v0.5.0).
+#
+# Django version matrix
+# ─────────────────────
+#   v0.1.0 → v0.8.0  Django 5.2 LTS only   Python 3.10–3.13
+#   v0.9.0            Django 5.2 + 6.x      Python 3.12–3.14  (djlatest, see below)
+#   v1.0.0            Django 5.2 + 6.x      Python 3.12–3.14
+#
+# Database services
+# ─────────────────
+#   v0.1.0 → v0.2.0  SQLite in-memory (pytest-django DATABASES setting)
+#   v0.3.0 →          PostgreSQL service required (ltree backend)
+#                     → Uncomment the `services:` block in .test_base
+#
+# Required CI/CD variables (Settings → CI/CD → Variables)
+# ────────────────────────────────────────────────────────
+#   CODECOV_TOKEN        masked, NOT protected (inject in all pipelines)
+#   PYPI_API_TOKEN       masked, protected     (inject on protected tags v* only)
+#   TEST_PYPI_API_TOKEN  masked, protected     (inject on protected tags v* only)
+#
 # =============================================================================
 
-default:
-  image: python:3.12
-
-variables:
-  UV_VERSION: "latest"
-  PIP_NO_CACHE_DIR: "1"
-
-# -----------------------------------------------------------------------------
-# Pipeline rules
-# -----------------------------------------------------------------------------
-workflow:
-  rules:
-    - if: $CI_COMMIT_BRANCH          # every push on any branch
-    - if: $CI_COMMIT_TAG             # every tag push
-
-# -----------------------------------------------------------------------------
-# Stages
-# -----------------------------------------------------------------------------
 stages:
-  - quality    # lint, type, security — fast, runs on every push
-  - test       # pytest full matrix   — runs on tag only (DD-006)
+  - quality
+  - test
+  - build
+  - publish
 
-# -----------------------------------------------------------------------------
-# Shared setup — install uv and the project dev dependencies
-# Used by quality jobs via YAML anchor <<: *setup
-# -----------------------------------------------------------------------------
-.setup: &setup
+# ─── Shared templates ─────────────────────────────────────────────────────────
+
+# Base image: python:3.12 full (not slim).
+# Reason: Pyright requires libatomic1, absent from python:*-slim images.
+.tox_setup:
+  image: python:3.12
   before_script:
-    - pip install uv --quiet
-    - uv venv --quiet
-    - source .venv/bin/activate
-    - uv pip install -e ".[dev]" --quiet
+    - pip install --quiet uv
+    - uv pip install --system tox tox-uv
+  cache:
+    key: "pip-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip/
+    policy: pull-push
 
-# -----------------------------------------------------------------------------
-# Quality stage — every push
-# -----------------------------------------------------------------------------
-lint:
-  stage: quality
-  <<: *setup
-  script:
-    - ruff check .
-    - ruff format --check .
+# ─── Shared rule sets ─────────────────────────────────────────────────────────
+
+# Every push on any branch, and every merge request event.
+.rules_on_push:
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
-type:
-  stage: quality
-  <<: *setup
-  script:
-    - pyright
+# Any version tag: final (v0.2.0) or release candidate (v0.2.0rc1).
+.rules_any_version_tag:
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
 
-security:
-  stage: quality
-  <<: *setup
-  script:
-    - bandit -c pyproject.toml -r src/clade
+# Release candidates only (v0.2.0rc1, v0.3.0rc2, …).
+.rules_rc_tag:
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+rc\d+$/'
 
-# -----------------------------------------------------------------------------
-# Test stage — tag push only (DD-006)
-# Full matrix: Python 3.10–3.13 × Django 5.2 LTS
-#
-# Each job:
-#   1. Installs uv and the pinned Django version
-#   2. Runs pytest with coverage (exit code 5 = no tests collected, allowed)
-#   3. Uploads the coverage report to codecov.io via codecov-cli
-#
-# Required CI variable (project scope, masked):
-#   CODECOV_TOKEN — repository token from codecov.io
-# -----------------------------------------------------------------------------
-.test_base:
-  stage: test
+# Final releases only (v0.2.0, v0.3.0, …) — no rc suffix.
+.rules_final_tag:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+
+# ─── Stage: quality ───────────────────────────────────────────────────────────
+# Runs on every push and MR. All five jobs run in parallel.
+# Tool names mirror the ndict-tools tox environment names exactly.
+
+.quality_base:
+  extends:
+    - .tox_setup
+    - .rules_on_push
+  stage: quality
+
+basedpyright:
+  extends: .quality_base
   script:
-    - pip install uv --quiet
-    - uv venv --quiet
-    - source .venv/bin/activate
-    - uv pip install django${DJANGO_VERSION} pytest pytest-django pytest-cov --quiet
-    - uv pip install -e . --quiet
-    - pytest --cov=src/clade --cov-report=term-missing --cov-report=xml || [ $? -eq 5 ]
-    - pip install codecov-cli --quiet
-    - codecovcli upload-process --file coverage.xml --flag unittests --git-service gitlab
-  coverage: '/TOTAL.*\s+(\d+%)$/'
+    - tox -e basedpyright
+
+flake8:
+  extends: .quality_base
+  script:
+    - tox -e flake8
   artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage.xml
-    expire_in: 1 week
-  rules:
-    - if: $CI_COMMIT_TAG
+    name: "flake8-report-$CI_COMMIT_SHORT_SHA"
+    when: always
+    paths:
+      - .tox/flake8/log/
+    expire_in: 30 days
 
-# Django 5.2 LTS — active (v0.1.0 → v0.8.0)
-test-py310-dj52:
+black-check:
+  extends: .quality_base
+  script:
+    - tox -e black-check
+
+isort-check:
+  extends: .quality_base
+  script:
+    - tox -e isort-check
+
+bandit:
+  extends: .quality_base
+  script:
+    - tox -e bandit
+
+# ─── Stage: test ──────────────────────────────────────────────────────────────
+# Runs on every push and MR, after the quality stage has passed.
+# Each job targets a specific Python interpreter; Django 5.2 LTS is implicit
+# in the tox environment definition (pyproject.toml).
+#
+# Framework integration
+# ─────────────────────
+# pytest-django reads DJANGO_SETTINGS_MODULE from pyproject.toml
+# ([tool.pytest.ini_options]). No explicit env var is required here.
+#
+# TODO v1.0.0 — PostgreSQL service (scheduled integration pipeline only)
+# The push pipeline always uses SQLite (standard tests, see DD-011).
+# This block is activated at v1.0.0 in a dedicated scheduled job on main,
+# not here. Do not uncomment in the push pipeline.
+
+.test_base:
+  extends:
+    - .rules_on_push
+  stage: test
+  needs:
+    - basedpyright
+    - flake8
+    - black-check
+    - isort-check
+    - bandit
+  before_script:
+    - pip install --quiet uv
+    - uv pip install --system tox tox-uv
+  # ── TODO v0.3.0: PostgreSQL service (ltree backend) ──────────────────────
+  # Uncomment when activating DD-003 (PostgreSQL + ltree).
+  #
+  # services:
+  #   - postgres:16-alpine
+  #
+  # variables:
+  #   POSTGRES_DB:       clade_test
+  #   POSTGRES_USER:     clade
+  #   POSTGRES_PASSWORD: clade
+  #   POSTGRES_HOST:     postgres
+  #   DATABASE_URL:      "postgresql://clade:clade@postgres/clade_test"
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # TODO v0.2.0: remove "|| [ $? -eq 5 ]" once the first real test is collected.
+  # Exit code 5 = pytest found no tests — acceptable during scaffolding phase.
+
+# Django 5.2 LTS — Python 3.10
+test-py310:
   extends: .test_base
-  image: python:3.10-slim
-  variables:
-    DJANGO_VERSION: "~=5.2"
+  image: python:3.10
+  script:
+    - tox -e py310 || [ $? -eq 5 ]
 
-test-py311-dj52:
+# Django 5.2 LTS — Python 3.11
+test-py311:
   extends: .test_base
-  image: python:3.11-slim
-  variables:
-    DJANGO_VERSION: "~=5.2"
+  image: python:3.11
+  script:
+    - tox -e py311 || [ $? -eq 5 ]
 
-test-py312-dj52:
+# Django 5.2 LTS — Python 3.12
+test-py312:
   extends: .test_base
-  image: python:3.12-slim
-  variables:
-    DJANGO_VERSION: "~=5.2"
+  image: python:3.12
+  script:
+    - tox -e py312 || [ $? -eq 5 ]
+  after_script:
+    # Upload partial coverage to Codecov (flag: python version).
+    # Codecov waits for after_n_builds reports before publishing the final result
+    # (configured in .codecov.yml: after_n_builds: 2, one per uploading job).
+    - pip install --quiet codecov-cli
+    - codecovcli upload-process --git-service gitlab --flag py312 || true
 
-test-py313-dj52:
+# Django 5.2 LTS — Python 3.13
+test-py313:
   extends: .test_base
-  image: python:3.13-slim
-  variables:
-    DJANGO_VERSION: "~=5.2"
+  image: python:3.13
+  script:
+    - tox -e py313 || [ $? -eq 5 ]
+  after_script:
+    - pip install --quiet codecov-cli
+    - codecovcli upload-process --git-service gitlab --flag py313 || true
 
-# Django 6.0+ — activate at v0.9.0 (transition phase, DD-009)
-# Uncomment the three jobs below at v0.9.0:
+# ── TODO v0.9.0: Django 6.x environments (djlatest) ─────────────────────────
+# Activate at v0.9.0 by uncommenting these jobs and their counterparts in
+# pyproject.toml ([tool.tox] env_list) and .tox-config/versions.txt.
+# Python 3.14 is experimental — allow_failure: true is intentional.
 #
 # test-py312-djlatest:
 #   extends: .test_base
-#   image: python:3.12-slim
-#   variables:
-#     DJANGO_VERSION: ">=6.0"
+#   image: python:3.12
+#   script:
+#     - tox -e py312-djlatest
 #
 # test-py313-djlatest:
 #   extends: .test_base
-#   image: python:3.13-slim
-#   variables:
-#     DJANGO_VERSION: ">=6.0"
+#   image: python:3.13
+#   script:
+#     - tox -e py313-djlatest
 #
 # test-py314-djlatest:
 #   extends: .test_base
-#   image: python:3.14-slim
-#   variables:
-#     DJANGO_VERSION: ">=6.0"
+#   image: python:3.14-rc
+#   allow_failure: true
+#   script:
+#     - tox -e py314-djlatest
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── Stage: build ─────────────────────────────────────────────────────────────
+# Runs on version tags only (final and rc), after quality + test have passed.
+# Checks version consistency across tag, pyproject.toml, and __init__.py,
+# then produces the source and wheel distributions.
+
+build:
+  extends: .rules_any_version_tag
+  stage: build
+  image: python:3.12
+  needs:
+    - basedpyright
+    - flake8
+    - black-check
+    - isort-check
+    - bandit
+    - test-py310
+    - test-py311
+    - test-py312
+    - test-py313
+  before_script:
+    - pip install build packaging
+  script:
+    # ── Version consistency check ─────────────────────────────────────────
+    - |
+      python - <<'EOF'
+      import sys, os, re, tomllib
+      from pathlib import Path
+      from packaging import version as pkg_version
+
+      tag = os.environ["CI_COMMIT_TAG"].lstrip("v")
+
+      with open("pyproject.toml", "rb") as f:
+          pyproject_ver = tomllib.load(f)["project"]["version"]
+
+      # __init__.py version is optional — not all Django apps expose it.
+      init_ver = None
+      for init_file in Path("src").rglob("__init__.py"):
+          m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', init_file.read_text())
+          if m:
+              init_ver = m.group(1)
+              break
+
+      errors = []
+      if pkg_version.parse(tag) != pkg_version.parse(pyproject_ver):
+          errors.append(f"Tag ({tag}) != pyproject.toml ({pyproject_ver})")
+      if init_ver and pkg_version.parse(tag) != pkg_version.parse(init_ver):
+          errors.append(f"Tag ({tag}) != __init__.py ({init_ver})")
+
+      if errors:
+          for e in errors:
+              print(f"ERROR: {e}", file=sys.stderr)
+          sys.exit(1)
+
+      print(f"✅ Version consistent: {tag}")
+      print(f"   pyproject.toml : {pyproject_ver}")
+      if init_ver:
+          print(f"   __init__.py    : {init_ver}")
+      EOF
+    # ── Build sdist + wheel ───────────────────────────────────────────────
+    - python -m build
+    - echo "--- dist/ ---" && ls -lh dist/
+  artifacts:
+    name: "dist-$CI_COMMIT_TAG"
+    paths:
+      - dist/
+    expire_in: 7 days
+
+# ─── Stage: publish ───────────────────────────────────────────────────────────
+
+# Publish to TestPyPI — release candidates only (v0.2.0rc1, …)
+# Requires: TEST_PYPI_API_TOKEN (masked + protected, Settings → CI/CD → Variables)
+publish-testpypi:
+  extends: .rules_rc_tag
+  stage: publish
+  image: python:3.12
+  needs: [build]
+  before_script:
+    - pip install --quiet uv
+  script:
+    # Guard: skip if this version is already published.
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      if curl -sf "https://test.pypi.org/pypi/django-clade/${VERSION}/json" > /dev/null 2>&1; then
+        echo "✅ django-clade==${VERSION} already on TestPyPI — skipping."
+        exit 0
+      fi
+    - uv publish dist/* --publish-url https://test.pypi.org/legacy/ --token "$TEST_PYPI_API_TOKEN"
+    # Availability check (max 5 minutes).
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      MAX=20
+      for i in $(seq 1 $MAX); do
+        printf "Attempt %d/%d…\n" "$i" "$MAX"
+        curl -sf "https://test.pypi.org/pypi/django-clade/${VERSION}/json" > /dev/null 2>&1 && break
+        sleep 15
+      done
+      echo "✅ django-clade==${VERSION} available on TestPyPI."
+  environment:
+    name: testpypi
+    url: https://test.pypi.org/project/django-clade/
+
+# Publish to PyPI — final releases only (v0.2.0, v0.3.0, …)
+# Requires: PYPI_API_TOKEN (masked + protected, Settings → CI/CD → Variables)
+publish-pypi:
+  extends: .rules_final_tag
+  stage: publish
+  image: python:3.12
+  needs: [build]
+  before_script:
+    - pip install --quiet uv
+  script:
+    # Guard: skip if this version is already published.
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      if curl -sf "https://pypi.org/pypi/django-clade/${VERSION}/json" > /dev/null 2>&1; then
+        echo "✅ django-clade==${VERSION} already on PyPI — skipping."
+        exit 0
+      fi
+    - uv publish dist/* --token "$PYPI_API_TOKEN"
+    # Availability check (max 5 minutes).
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      MAX=20
+      for i in $(seq 1 $MAX); do
+        printf "Attempt %d/%d…\n" "$i" "$MAX"
+        curl -sf "https://pypi.org/pypi/django-clade/${VERSION}/json" > /dev/null 2>&1 && break
+        sleep 15
+      done
+      echo "✅ django-clade==${VERSION} available on PyPI."
+    - echo "🚀 https://pypi.org/project/django-clade/${CI_COMMIT_TAG#v}/"
+  environment:
+    name: pypi
+    url: https://pypi.org/project/django-clade/
+
+# ─── DD-010 Stage 2 placeholder (v0.5.0) ──────────────────────────────────────
+# At v0.5.0, add a `release` job using release-cli that reads the CHANGELOG.md
+# section matching the tag and creates the GitLab release automatically.
+# Until then, create the release manually via the GitLab UI after publish-pypi.
+#
+# release:
+#   extends: .rules_final_tag
+#   stage: publish
+#   image: registry.gitlab.com/gitlab-org/release-cli:latest
+#   needs: [publish-pypi]
+#   script:
+#     - |
+#       VERSION="${CI_COMMIT_TAG#v}"
+#       awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{if(flag) exit} flag" \
+#         CHANGELOG.md > release_notes.md
+#   release:
+#     tag_name: $CI_COMMIT_TAG
+#     name: "django-clade $CI_COMMIT_TAG"
+#     description: "./release_notes.md"
+#     assets:
+#       links:
+#         - name: "PyPI"
+#           url: "https://pypi.org/project/django-clade/$CI_COMMIT_TAG/"
