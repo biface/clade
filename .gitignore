@@ -134,7 +134,7 @@ venv.bak/
 .uv/
 # uv.lock is intentionally not committed for a distributed module
 # (consumers manage their own dependency resolution).
-# uv.lock
+uv.lock
 
 # Pyright
 .pyright/
