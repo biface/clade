@@ -1,25 +1,26 @@
-# =============================================================================
-# .tox-config/versions.txt — Hierarchy project
-# =============================================================================
-# Versions Python à tester séquentiellement par test.sh.
+# Configuration des versions Python pour les tests
+# ================================================
+#
+# Ce fichier définit les versions Python testées séquentiellement
+# par .tox-config/scripts/test.sh.
 #
 # Format :
-# - Une version par ligne (ex: py310-dj52)
+# - Une version par ligne (ex: py310, py311)
 # - Les lignes vides et commençant par # sont ignorées
-# - L'ordre détermine la séquence d'exécution
 #
-# Pour ajouter/retirer une version, éditez ce fichier.
-# Pas besoin de modifier pyproject.toml.
-# =============================================================================
+# Matrice active (v0.1.0 → v0.8.0) : Django 5.2 LTS × Python 3.10–3.13
+# Transition (v0.9.0) : ajouter py312-djlatest, py313-djlatest
+# Stable (v1.0.0)     : ajouter py314-djlatest
+#
+# Modification : éditer ce fichier uniquement — pas besoin de toucher tox.
+# ================================================
 
-# Django 5.2 LTS — active (v0.1.0 → v0.8.0)
-py310-dj52
-py311-dj52
-py312-dj52
-py313-dj52
+py310
+py311
+py312
+py313
 
-# Django 6.0+ — activated at v0.9.0 (transition phase)
-# Uncomment when ready:
+# Django 6.0+ — activé à v0.9.0
 # py312-djlatest
 # py313-djlatest
 # py314-djlatest

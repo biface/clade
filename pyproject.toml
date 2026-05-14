@@ -1,12 +1,16 @@
 # =============================================================================
-# pyproject.toml — Hierarchy project
+# pyproject.toml — django-clade
 # Single configuration file for packaging, toolchain and test orchestration.
+#
+# Toolchain: superset of ndict-tools (DD-009, amended 2026-05-13)
+#   Base:   flake8, black, isort, basedpyright, bandit, tox + tox-uv, pytest-cov
+#   Django: pytest-django, django~=5.2
 #
 # Refs: DD-007 (SemVer), DD-008 (Django add-on), DD-009 (toolchain)
 # GitLab:
-#  https://gitlab.com/open-works/clade/-/work_items/6
-#  https://gitlab.com/open-works/clade/-/work_items/7
-#  https://gitlab.com/open-works/clade/-/work_items/9
+#  https://gitlab.com/open-works/clade/-/issues/7
+#  https://gitlab.com/open-works/clade/-/issues/8
+#  https://gitlab.com/open-works/clade/-/issues/9
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -25,7 +29,7 @@ packages = ["src/clade"]
 # -----------------------------------------------------------------------------
 [project]
 name            = "django-clade"
-version         = "0.0.5"
+version         = "0.1.0"
 description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
 readme          = "README.md"
 license         = { file = "LICENSE.txt" }
@@ -42,7 +46,7 @@ keywords = [
     "adjacency",
 ]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 2 - Pre-Alpha",
     "Framework :: Django",
     "Framework :: Django :: 5.2",
     "Intended Audience :: Developers",
@@ -53,7 +57,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
@@ -70,72 +73,61 @@ Mirror     = "https://github.com/open-works/clade"
 
 [project.optional-dependencies]
 dev = [
-    "ruff",
-    "pyright",
-    "django-stubs",
+    # Base toolchain — shared with ndict-tools
+    "flake8",
+    "black",
+    "isort",
+    "basedpyright",
     "bandit",
     "tox",
     "tox-uv",
     "pytest",
-    "pytest-django",
     "pytest-cov",
+    # Django layer — clade only
+    "pytest-django",
+    "django~=5.2",
 ]
 
 
 # -----------------------------------------------------------------------------
-# Ruff — lint + format
-# Refs: https://gitlab.com/open-works/clade/-/work_items/9
+# black — code formatting
+# Refs: DD-009
 # -----------------------------------------------------------------------------
-[tool.ruff]
-target-version = "py310"
+[tool.black]
+target-version = ["py310", "py311", "py312", "py313"]
 line-length    = 88
-src            = ["src"]
-
-[tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes
-    "I",    # isort
-    "B",    # flake8-bugbear
-    "C4",   # flake8-comprehensions
-    "UP",   # pyupgrade
-    "DJ",   # flake8-django
-    "S",    # flake8-bandit (subset)
-    "T20",  # flake8-print
-    "RUF",  # Ruff-specific rules
-]
-ignore = [
-    "S101",  # assert — acceptable in tests
-    "DJ001", # null=True on string fields — reviewed case by case
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"]
-"tests/settings.py" = ["S105"]
-
-[tool.ruff.format]
-quote-style               = "double"
-indent-style              = "space"
-skip-magic-trailing-comma = false
 
 
 # -----------------------------------------------------------------------------
-# Pyright — type checking
-# Refs: https://gitlab.com/open-works/clade/-/work_items/9
+# isort — import sorting
+# Refs: DD-009
+# -----------------------------------------------------------------------------
+[tool.isort]
+profile                     = "black"
+line_length                 = 88
+known_first_party           = ["clade"]
+multi_line_output           = 3
+include_trailing_comma      = true
+force_grid_wrap             = 0
+use_parentheses             = true
+ensure_newline_before_comments = true
+
+
+# -----------------------------------------------------------------------------
+# basedpyright — type checking (reads from [tool.pyright])
+# Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.pyright]
 include               = ["src/clade"]
 pythonVersion         = "3.10"
 typeCheckingMode      = "strict"
-djangoSettingsModule  = "tests.settings"
 reportMissingImports  = true
 reportMissingTypeStubs = false
 
 
 # -----------------------------------------------------------------------------
 # Bandit — security analysis
-# Refs: https://gitlab.com/open-works/clade/-/work_items/9
+# Refs: DD-009
 # -----------------------------------------------------------------------------
 [tool.bandit]
 targets = ["src/clade"]
@@ -143,10 +135,8 @@ skips   = ["B101"]
 
 
 # -----------------------------------------------------------------------------
-# pytest
-# Refs: 
-#  https://gitlab.com/open-works/clade/-/work_items/6
-#  https://gitlab.com/open-works/clade/-/work_items/9
+# pytest — test runner
+# Refs: DD-006, DD-009, DD-011, DD-012
 # -----------------------------------------------------------------------------
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
@@ -160,13 +150,15 @@ addopts                = [
     "--import-mode=importlib",
     "-v",
 ]
+markers = [
+    "django_db: marks tests requiring database access (deselect with '-m not django_db')",
+    "integration: marks tests requiring real PostgreSQL — local only until v1.0.0 (DD-011)",
+]
 
 
 # -----------------------------------------------------------------------------
 # Coverage
-# Refs: 
-#  https://gitlab.com/open-works/clade/-/work_items/6
-#  https://gitlab.com/open-works/clade/-/work_items/9
+# Refs: DD-006, DD-009
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
 source = ["src/clade"]
@@ -189,109 +181,187 @@ exclude_lines = [
 
 
 # -----------------------------------------------------------------------------
-# tox — orchestration via tox-uv (option B: DJANGO_VERSION variable)
-# Full matrix runs on CI tag only.
-# Local: tox -e lint,type,security  or  tox -e py312-dj52  or  tox
-# Refs: 
-#  https://gitlab.com/open-works/clade/-/work_items/6
-#  https://gitlab.com/open-works/clade/-/work_items/9
+# tox — test orchestration
+#
+# Environment naming follows ndict-tools convention (DD-009):
+#   Quality : basedpyright, flake8, black-check, isort-check, bandit
+#   Tests   : py310, py311, py312, py313  (deps from base.django.txt)
+#   djlatest: py312-djlatest … py314-djlatest — activated at v0.9.0
+#   Extras  : coverage, integration (v0.3.0), pre-push
+#
+# Scripts shared with ndict-tools (no modification):
+#   .tox-config/scripts/test.sh       reads versions.txt
+#   .tox-config/scripts/coverage.sh   reads coverage-version.txt
+#
+# Refs: DD-006, DD-009, DD-011
 # -----------------------------------------------------------------------------
 [tool.tox]
-requires     = ["tox>=4", "tox-uv"]
-env_list     = [
-    "lint",
-    "type",
-    "security",
-    # Django 5.2 LTS — active (v0.1.0 → v0.8.0)
-    "py310-dj52",
-    "py311-dj52",
-    "py312-dj52",
-    "py313-dj52",
-    # Django 6.0+ — activate at v0.9.0 (transition phase)
+requires  = ["tox>=4", "tox-uv"]
+env_list  = [
+    # Quality (parallel in CI, sequential locally)
+    "basedpyright",
+    "flake8",
+    "black-check",
+    "isort-check",
+    "bandit",
+    # Tests — Django 5.2 LTS (v0.1.0 → v0.8.0)
+    "py310",
+    "py311",
+    "py312",
+    "py313",
+    # Django 6.0+ — activated at v0.9.0
     # "py312-djlatest",
     # "py313-djlatest",
     # "py314-djlatest",
 ]
 
+# Base for all test environments (py310, py311, py312, py313)
+# Quality environments override commands and deps entirely.
+# Coverage flags are intentionally absent: coverage is generated
+# by tox -e coverage only, not duplicated across all Python versions.
 [tool.tox.env_run_base]
 runner   = "uv-venv-runner"
 setenv   = { DJANGO_SETTINGS_MODULE = "tests.settings" }
+deps     = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
 commands = [
-    ["pytest",
-     "--cov=src/clade",
-     "--cov-report=term-missing",
-     "--cov-report=xml:{toxworkdir}/coverage.xml"],
+    ["pytest"],
 ]
 
-# --- Lint ---
-[tool.tox.env.lint]
-description = "Ruff — lint and format check"
-deps        = ["-r .tox-config/requirements/linter.txt"]
-allowlist_externals = ["ruff"]
-commands    = [
-    ["ruff", "check", "src/", "tests/"],
-    ["ruff", "format", "--check", "src/", "tests/"],
+# =============================================================================
+# Quality environments
+# =============================================================================
+
+[tool.tox.env.basedpyright]
+description         = "basedpyright — static type checking"
+deps                = ["-r {toxinidir}/.tox-config/requirements/type-check.django.txt"]
+allowlist_externals = ["bash"]
+commands            = [
+    # uv-venv-runner installs deps into .venv/bin/ (project venv), which is on PATH.
+    # bash inherits that PATH and finds basedpyright there.
+    # Exit 0 = ok, 1/2/3 = warnings/errors found; all acceptable.
+    # Exit > 3 = tool failure → tox reports failure correctly.
+    ["bash", "-c", "basedpyright src; code=$?; [ $code -le 3 ]"],
 ]
 
-# --- Type checking ---
-[tool.tox.env.type]
-description = "Pyright — static type checking"
-deps        = ["-r .tox-config/requirements/type-check.txt"]
-allowlist_externals = ["pyright"]
-commands    = [["pyright"]]
+[tool.tox.env.flake8]
+description         = "flake8 — lint"
+deps                = ["-r {toxinidir}/.tox-config/requirements/linter.txt"]
+allowlist_externals = ["flake8"]
+commands            = [
+    ["flake8",
+     "--max-line-length=88",
+     "--extend-ignore=E203,W503",
+     "--exclude=.tox,.git,__pycache__,build,dist,migrations",
+     "--per-file-ignores=tests/*.py:F401,F841,E711,E712 tests/settings.py:S105",
+     "src/",
+     "tests/"],
+]
 
-# --- Security ---
-[tool.tox.env.security]
-description = "Bandit — security analysis"
-deps        = ["-r .tox-config/requirements/linter.txt"]
+[tool.tox.env."black-check"]
+description         = "black — format check (no changes)"
+deps                = ["-r {toxinidir}/.tox-config/requirements/format.txt"]
+allowlist_externals = ["black"]
+commands            = [
+    ["black", "--check", "--diff", "--target-version", "py310", "src/", "tests/"],
+]
+
+[tool.tox.env."isort-check"]
+description         = "isort — import order check (no changes)"
+deps                = ["-r {toxinidir}/.tox-config/requirements/format.txt"]
+allowlist_externals = ["isort"]
+commands            = [
+    ["isort", "--check-only", "--diff", "src/", "tests/"],
+]
+
+[tool.tox.env.bandit]
+description         = "bandit — security analysis"
+deps                = ["-r {toxinidir}/.tox-config/requirements/security.txt"]
 allowlist_externals = ["bandit"]
-commands    = [["bandit", "-c", "pyproject.toml", "-r", "src/clade"]]
+commands            = [
+    ["bandit", "-c", "pyproject.toml", "-r", "src/clade"],
+]
 
-# --- Django 5.2 LTS ---
-[tool.tox.env."py310-dj52"]
+# =============================================================================
+# Test environments — Django 5.2 LTS
+# Deps inherited from env_run_base (base.django.txt).
+# Commands inherited from env_run_base.
+# =============================================================================
+
+[tool.tox.env.py310]
 description = "pytest — Python 3.10 × Django 5.2 LTS"
 base_python = "python3.10"
-deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."py311-dj52"]
+[tool.tox.env.py311]
 description = "pytest — Python 3.11 × Django 5.2 LTS"
 base_python = "python3.11"
-deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."py312-dj52"]
+[tool.tox.env.py312]
 description = "pytest — Python 3.12 × Django 5.2 LTS"
 base_python = "python3.12"
-deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-[tool.tox.env."py313-dj52"]
+[tool.tox.env.py313]
 description = "pytest — Python 3.13 × Django 5.2 LTS"
 base_python = "python3.13"
-deps        = ["-r .tox-config/requirements/base-dj52.txt"]
 
-# --- Django latest ---
-# Django 6.0+ does not support Python 3.10 or 3.11
-[tool.tox.env."py312-djlatest"]
-description = "pytest — Python 3.12 × Django latest (6.0+)"
-base_python = "python3.12"
-deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+# =============================================================================
+# Test environments — Django latest (activated at v0.9.0)
+# Django 6.0+ does not support Python 3.10 or 3.11.
+# =============================================================================
 
-[tool.tox.env."py313-djlatest"]
-description = "pytest — Python 3.13 × Django latest (6.0+)"
-base_python = "python3.13"
-deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+# [tool.tox.env."py312-djlatest"]
+# description = "pytest — Python 3.12 × Django latest (6.0+)"
+# base_python = "python3.12"
+# deps        = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
 
-[tool.tox.env."py314-djlatest"]
-description = "pytest — Python 3.14 × Django latest (6.0+)"
-base_python = "python3.14"
-deps        = ["-r .tox-config/requirements/base-djlatest.txt"]
+# [tool.tox.env."py313-djlatest"]
+# description = "pytest — Python 3.13 × Django latest (6.0+)"
+# base_python = "python3.13"
+# deps        = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
 
-# --- Coverage locale ---
+# [tool.tox.env."py314-djlatest"]
+# description = "pytest — Python 3.14 × Django latest (6.0+)"
+# base_python = "python3.14"
+# deps        = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
+
+# =============================================================================
+# Auto-fix environments (local only — not in CI)
+# =============================================================================
+
+[tool.tox.env.black]
+description         = "black — auto-format code"
+deps                = ["-r {toxinidir}/.tox-config/requirements/format.txt"]
+allowlist_externals = ["black"]
+commands            = [
+    ["black", "--target-version", "py310", "src/", "tests/"],
+]
+
+[tool.tox.env.isort]
+description         = "isort — auto-sort imports"
+deps                = ["-r {toxinidir}/.tox-config/requirements/format.txt"]
+allowlist_externals = ["isort"]
+commands            = [
+    ["isort", "src/", "tests/"],
+]
+
+[tool.tox.env.format]
+description         = "black + isort — auto-format everything"
+deps                = ["-r {toxinidir}/.tox-config/requirements/format.txt"]
+allowlist_externals = ["black", "isort"]
+commands            = [
+    ["black", "--target-version", "py310", "src/", "tests/"],
+    ["isort", "src/", "tests/"],
+]
+
+# =============================================================================
+# Coverage (local + CI)
+# =============================================================================
+
 [tool.tox.env.coverage]
-description = "Generate full coverage report (HTML + XML)"
-base_python = "python3.12"
-deps        = ["-r .tox-config/requirements/base-dj52.txt"]
-allowlist_externals = ["pytest", "mkdir"]
-commands    = [
+description         = "Generate full coverage report (HTML + XML)"
+base_python         = "python3.12"
+deps                = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
+allowlist_externals = ["mkdir", "pytest"]
+commands            = [
     ["mkdir", "-p", "{toxinidir}/coverage"],
     ["pytest",
      "--cov=src/clade",
@@ -301,17 +371,49 @@ commands    = [
      "--cov-report=html:{toxinidir}/coverage/coverage_html"],
 ]
 
-# --- Pre-push local workflow ---
+# =============================================================================
+# Integration tests (v0.3.0 — local only until v1.0.0)
+# Refs: DD-011
+# =============================================================================
+
+# [tool.tox.env.integration]
+# description = "Integration tests against real PostgreSQL (DD-011)"
+# base_python = "python3.12"
+# deps        = ["-r {toxinidir}/.tox-config/requirements/integration.txt"]
+# setenv      = { DJANGO_SETTINGS_MODULE = "tests.settings_integration" }
+# commands    = [["pytest", "-m", "integration", {posargs}]]
+
+# =============================================================================
+# Pre-push local workflow
+# Runs the full quality + test + coverage chain before git push.
+# =============================================================================
+
 [tool.tox.env.pre-push]
-description = "Full local workflow before push (quality + tests + coverage)"
-deps        = ["-r .tox-config/requirements/full.txt"]
-allowlist_externals = ["ruff", "pyright", "bandit", "bash"]
-passenv     = ["HOME", "USER"]
-commands    = [
-    ["ruff", "check", "src/", "tests/"],
-    ["ruff", "format", "--check", "src/", "tests/"],
-    ["pyright"],
+description         = "Full local workflow before push (format + quality + tests + coverage)"
+deps                = ["-r {toxinidir}/.tox-config/requirements/full.django.txt"]
+allowlist_externals = ["black", "isort", "bash", "basedpyright", "flake8", "bandit"]
+passenv             = ["HOME", "USER"]
+commands            = [
+    # 1. Auto-format
+    ["black", "--target-version", "py310", "src/", "tests/"],
+    ["isort", "src/", "tests/"],
+    # 2. Type checking
+    ["bash", "-c", "basedpyright src; code=$?; [ $code -le 3 ]"],
+    # 3. Lint
+    ["flake8",
+     "--max-line-length=88",
+     "--extend-ignore=E203,W503",
+     "--exclude=.tox,.git,__pycache__,build,dist,migrations",
+     "--per-file-ignores=tests/*.py:F401,F841,E711,E712 tests/settings.py:S105",
+     "src/",
+     "tests/"],
+    # 4. Format verification (should always pass after step 1)
+    ["black", "--check", "--diff", "--target-version", "py310", "src/", "tests/"],
+    ["isort", "--check-only", "--diff", "src/", "tests/"],
+    # 5. Security
     ["bandit", "-c", "pyproject.toml", "-r", "src/clade"],
+    # 6. Tests (all Python versions, sequential)
     ["bash", "{toxinidir}/.tox-config/scripts/test.sh"],
+    # 7. Coverage report
     ["bash", "{toxinidir}/.tox-config/scripts/coverage.sh"],
 ]
