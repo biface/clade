@@ -9,14 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] — 2026-05-14
+
 ### Added
 - `CladeNode` abstract base class with `parent` FK and `path` field (DD-012, DD-013)
-- Test infrastructure: `SimpleNode`, reference tree fixture, `conftest.py`
+- `ADOPT` custom `on_delete` callable — re-parents children to grandparent on
+  deletion, works with both `instance.delete()` and `QuerySet.delete()` (DD-014)
+- Path maintenance via `post_save` and `post_delete` signals, SQLite backend (DD-013)
+- `NodeQuerySet`: `ancestors_of`, `descendants_of`, `siblings_of`, `root_of`
+- `CladeNode` instance methods: `ancestors()`, `descendants()`, `siblings()`,
+  `root`, `is_root`, `is_leaf`
+- Test infrastructure: `SimpleNode`, `AdoptNode`, reference tree fixture, `conftest.py`
+- Full test suite: path maintenance, hierarchy queries, ADOPT deletion
 
 ### Changed
 - CI: `--no-migrations` for standard test runs; `migrations` job on MR→staging
-- CI: remove `|| [ $? -eq 5 ]` workaround (real tests now collected)
+- CI: branching strategy `feature/* → update/x.y.z → staging → main`
+- CI: remove `|| [ $? -eq 5 ]` workaround — real tests now collected
+- Toolchain: `flake8` + `black` + `isort` + `basedpyright` (aligned with ndict-tools)
+- Toolchain: `*.django.txt` naming convention for Django-specific requirements
 - Toolchain: `typeCheckingMode` standard (django-stubs compatibility)
+
+### Fixed
+- `ADOPT` refactored as class-based callable (basedpyright `reportFunctionMemberAccess`)
 
 ---
 
@@ -46,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.1.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.2.0...HEAD
+[0.2.0]: https://gitlab.com/open-works/clade/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/open-works/clade/-/releases/v0.1.0
 [0.0.5]: https://gitlab.com/open-works/clade/-/releases/v0.0.5

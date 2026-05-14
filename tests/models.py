@@ -1,28 +1,20 @@
 # =============================================================================
-# tests/models.py — Concrete test models
+# tests/models.py — Concrete test models.
 #
-# These models exist solely to exercise CladeNode in the test suite.
-# They are not part of the clade public API.
+# SimpleNode   Default CASCADE deletion (CladeNode default).
+# AdoptNode    Custom ADOPT deletion — re-parents children on delete.
 #
-# SimpleNode  — uses the default CASCADE deletion strategy
-# AdoptNode   — uses the ADOPT deletion strategy (#43, activated later)
-#
-# Refs: DD-012, DD-014
-#   https://gitlab.com/open-works/clade/-/issues/39  (DD-012)
-#   https://gitlab.com/open-works/clade/-/issues/41  (DD-014)
-#   https://gitlab.com/open-works/clade/-/issues/47  (this file)
+# Refs: DD-012 (#39), DD-014 (#41), #47, #49
 # =============================================================================
 
 from django.db import models
 
+from clade.deletion import ADOPT
 from clade.models import CladeNode
 
 
 class SimpleNode(CladeNode):
-    """Minimal concrete CladeNode for standard hierarchy tests.
-
-    Uses the default CASCADE deletion strategy inherited from CladeNode.
-    """
+    """Minimal concrete CladeNode for standard hierarchy tests."""
 
     name = models.CharField(max_length=64)
 
@@ -33,18 +25,24 @@ class SimpleNode(CladeNode):
         return self.name
 
 
-# AdoptNode is declared after ADOPT is implemented (#43).
-# It will override the parent FK with on_delete=ADOPT.
-#
-# class AdoptNode(CladeNode):
-#     from clade.deletion import ADOPT
-#     name = models.CharField(max_length=64)
-#     parent = models.ForeignKey(
-#         "self",
-#         null=True,
-#         blank=True,
-#         on_delete=ADOPT,
-#         related_name="children",
-#     )
-#     class Meta(CladeNode.Meta):
-#         app_label = "tests"
+class AdoptNode(CladeNode):
+    """Concrete CladeNode using ADOPT deletion strategy.
+
+    When an AdoptNode is deleted, its direct children are re-parented
+    to the grandparent rather than cascaded.
+    """
+
+    name = models.CharField(max_length=64)
+    parent = models.ForeignKey(  # type: ignore[assignment]
+        "self",
+        null=True,
+        blank=True,
+        on_delete=ADOPT,
+        related_name="children",
+    )
+
+    class Meta(CladeNode.Meta):
+        app_label = "tests"
+
+    def __str__(self) -> str:
+        return self.name
