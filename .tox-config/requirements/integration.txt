@@ -1,0 +1,7 @@
+-r base.django.txt
+# PostgreSQL driver — activated at v0.3.0 (DD-003, DD-011)
+# psycopg2-binary: pre-built, suitable for local dev and CI
+# Switch to psycopg2 (source build) for production deployments
+psycopg2-binary
+# ltree Django field — package to be decided at v0.3.0
+# django-ltree

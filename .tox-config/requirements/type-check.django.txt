@@ -1,0 +1,3 @@
+-r type-check.txt
+django-stubs[compatible-mypy]
+django~=5.2
