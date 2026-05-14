@@ -5,16 +5,23 @@
 
 [![pipeline status](https://gitlab.com/open-works/clade/badges/main/pipeline.svg)](https://gitlab.com/open-works/clade/-/pipelines)
 [![coverage](https://codecov.io/gl/open-works/clade/branch/main/graph/badge.svg)](https://codecov.io/gl/open-works/clade)
-[![PyPI](https://img.shields.io/pypi/v/clade)](https://pypi.org/project/clade/)
+[![PyPI](https://img.shields.io/pypi/v/django-clade)](https://pypi.org/project/django-clade/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.txt)
 
 ---
 
 ## Status
 
-**Pre-development** — `v0.0.5` in progress. Not yet usable.
+**Pre-alpha** — `v0.2.0` published. API not yet stable.
 
-See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and [open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the full roadmap.
+| Version | Status | Content |
+|---|---|---|
+| `v0.2.0` | ✅ Current | `CladeNode`, path maintenance, hierarchy queries, ADOPT deletion |
+| `v0.3.0` | 🔄 Next | PostgreSQL + ltree backend |
+
+See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and
+[open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the
+full roadmap.
 
 ---
 
@@ -26,28 +33,69 @@ not only parent/child pairs, but ancestors, descendants, siblings, and collatera
 lines (piblings, niblings, cousins…) — using gender-neutral terminology throughout.
 
 It also introduces **Affinity**: a lateral relationship between nodes that share
-attribute values without any hierarchical link between them.
+attribute values without any hierarchical link between them *(planned for v0.5.0)*.
 
 The module targets multiple database backends:
-- **PostgreSQL** with `ltree` — native optimisation (primary target)
-- **SQLite / other** — pure-Django fallback
+- **PostgreSQL** with `ltree` — native optimisation *(v0.3.0)*
+- **SQLite / other** — pure-Django Materialized Path fallback *(current)*
 
 ---
 
 ## Install
 
-> Not yet published. Instructions will be added at `v0.1.0`.
-
 ```bash
-pip install clade          # future
+pip install django-clade
 ```
 
-```python
+```python, ignore
 # settings.py
 INSTALLED_APPS = [
     ...
     "clade",
 ]
+```
+
+---
+
+## Usage
+
+```python
+from clade.models import CladeNode
+from django.db import models
+
+
+class Category(CladeNode):
+    name = models.CharField(max_length=255)
+
+
+# Build a tree
+root  = Category.objects.create(name="Root")
+child = Category.objects.create(name="Child", parent=root)
+leaf  = Category.objects.create(name="Leaf",  parent=child)
+
+# Traverse
+leaf.ancestors()             # QuerySet → [root, child]  (ordered by path)
+root.descendants()           # QuerySet → [child, leaf]
+child.siblings()             # QuerySet → []
+
+leaf.is_root                 # False
+leaf.is_leaf                 # True
+leaf.root                    # → root
+
+# Manager API
+Category.objects.ancestors_of(leaf)
+Category.objects.descendants_of(root)
+
+# Deletion strategies
+from clade.deletion import ADOPT
+
+class Department(CladeNode):
+    name = models.CharField(max_length=255)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True,
+        on_delete=ADOPT,          # re-parents children on delete
+        related_name="children",
+    )
 ```
 
 ---
