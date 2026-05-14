@@ -199,6 +199,25 @@ test-py313:
     - pip install --quiet codecov-cli
     - codecovcli upload-process --git-service gitlab --flag py313 || true
 
+# Migration validation — MR targeting staging branch only (DD-011)
+# Runs the full Django migration machinery (no --no-migrations).
+# Guarantees migrations are correct before reaching production.
+migrations:
+  extends:
+    - .tox_setup
+  stage: test
+  image: python:3.12
+  needs:
+    - basedpyright
+    - flake8
+    - black-check
+    - isort-check
+    - bandit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "staging"'
+  script:
+    - tox -e migrations
+
 # ── TODO v0.9.0: Django 6.x environments (djlatest) ─────────────────────────
 # Activate at v0.9.0 by uncommenting these jobs and their counterparts in
 # pyproject.toml ([tool.tox] env_list) and .tox-config/versions.txt.

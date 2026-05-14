@@ -120,7 +120,7 @@ ensure_newline_before_comments = true
 [tool.pyright]
 include               = ["src/clade"]
 pythonVersion         = "3.10"
-typeCheckingMode      = "strict"
+typeCheckingMode      = "standard"  # strict incompatible with django-stubs partial typing
 reportMissingImports  = true
 reportMissingTypeStubs = false
 
@@ -148,6 +148,8 @@ testpaths              = ["tests"]
 addopts                = [
     "--strict-markers",
     "--import-mode=importlib",
+    "--no-migrations",    # tables created directly from models (fast)
+                          # migration validation: tox -e migrations (staging MR)
     "-v",
 ]
 markers = [
@@ -382,6 +384,18 @@ commands            = [
 # deps        = ["-r {toxinidir}/.tox-config/requirements/integration.txt"]
 # setenv      = { DJANGO_SETTINGS_MODULE = "tests.settings_integration" }
 # commands    = [["pytest", "-m", "integration", {posargs}]]
+
+# =============================================================================
+# Migration validation (staging MR only — DD-011)
+# Runs WITHOUT --no-migrations to exercise the full migration machinery.
+# Triggered by the CI migrations job on MR → staging.
+# =============================================================================
+
+[tool.tox.env.migrations]
+description = "Validate Django migrations — run with full migration machinery"
+base_python = "python3.12"
+deps        = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
+commands    = [["pytest", "--migrations"]]
 
 # =============================================================================
 # Pre-push local workflow
