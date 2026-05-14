@@ -24,45 +24,34 @@
 # =============================================================================
 
 
-def ADOPT(collector, field, sub_objs, using):
+class _AdoptCallable:
     """Re-parent direct children to grandparent before deletion.
 
-    When a CladeNode is deleted with ``on_delete=ADOPT``, its direct
-    children are re-parented to the deleted node's own parent
-    (the grandparent) rather than being cascaded or orphaned.
+    Implemented as a class so that ``deconstruct`` can be declared as a
+    proper method — assigning attributes to a ``FunctionType`` is not
+    allowed by strict type checkers.
 
-    If the deleted node is a root (``parent=None``), its children
-    become new roots (``parent=None``).  This is documented behaviour,
-    not an error.
-
-    Path recalculation for adopted nodes is handled by the
-    ``post_delete`` signal registered in ``clade.apps`` (#44).
-
-    Parameters
-    ----------
-    collector : django.db.models.deletion.Collector
-        Accumulates the DB operations for this deletion.
-    field : django.db.models.fields.related.ForeignKey
-        The ``parent`` ForeignKey pointing to the node being deleted.
-    sub_objs : QuerySet
-        Direct children of the node being deleted.
-    using : str
-        Database alias.
+    Use the module-level ``ADOPT`` singleton rather than instantiating
+    this class directly.
     """
-    if not sub_objs:
-        return
 
-    # All sub_objs share the same parent (the node being deleted).
-    # We recover the grandparent from the first child's parent FK value.
-    parent_pk = getattr(sub_objs[0], field.attname)
-    parent_obj = field.related_model._default_manager.using(using).get(pk=parent_pk)
-    grandparent_pk = getattr(parent_obj, field.attname)  # None if root
+    def __call__(self, collector, field, sub_objs, using) -> None:  # noqa: D102
+        if not sub_objs:
+            return
 
-    # Bulk-update the FK on all direct children.
-    # Path recalculation is deferred to the post_delete signal.
-    collector.add_field_update(field, grandparent_pk, sub_objs)
+        parent_pk = getattr(sub_objs[0], field.attname)
+        parent_obj = field.related_model._default_manager.using(using).get(pk=parent_pk)
+        grandparent_pk = getattr(parent_obj, field.attname)
+
+        collector.add_field_update(field, grandparent_pk, sub_objs)
+
+    def deconstruct(self):
+        """Return the dotted import path for Django migration serialisation."""
+        return ("clade.deletion.ADOPT", [], {})
+
+    def __repr__(self) -> str:
+        return "clade.deletion.ADOPT"
 
 
-# Required for Django migration serialisation.
-# Allows makemigrations to reconstruct the callable from its dotted path.
-ADOPT.deconstruct = lambda: ("clade.deletion.ADOPT", [], {})
+#: Singleton callable — use this in ForeignKey ``on_delete`` arguments.
+ADOPT = _AdoptCallable()
