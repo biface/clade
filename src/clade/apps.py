@@ -6,4 +6,4 @@ class CladeConfig(AppConfig):
 
     name = "clade"
     verbose_name = "Clade"
-    default_auto_field = "django.db.models.BigAutoField"
+    default_auto_field = "django.db.models.BigAutoField"  # type: ignore[assignment]
