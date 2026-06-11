@@ -66,6 +66,17 @@ CREATE EXTENSION IF NOT EXISTS ltree;
 GRANT ALL PRIVILEGES ON DATABASE clade_test TO clade_dev;
 ```
 
+Django crée la base de test en clonant `template1`. L'extension `ltree` doit
+donc être activée sur `template1` également :
+
+```sql
+\c template1
+CREATE EXTENSION IF NOT EXISTS ltree;
+```
+
+Cette étape requiert les droits superutilisateur et n'est à effectuer qu'une
+seule fois par installation PostgreSQL.
+
 Ajouter les lignes suivantes dans `pg_hba.conf` :
 
 ```
