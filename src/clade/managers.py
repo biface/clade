@@ -90,7 +90,7 @@ class NodeQuerySet(models.QuerySet):
         if not node_path:
             return self.none()
         if connection.vendor == "postgresql":
-            return self.filter(**{f"{field_name}__ancestor_of": node_path})
+            return self.filter(**{f"{field_name}__ancestor_of": node_path}).exclude(pk=node.pk)
         parts = node_path.split(".")
         ancestor_paths = [".".join(parts[:i]) for i in range(1, len(parts))]
         if not ancestor_paths:
@@ -117,7 +117,7 @@ class NodeQuerySet(models.QuerySet):
         if not node_path:
             return self.none()
         if connection.vendor == "postgresql":
-            return self.filter(**{f"{field_name}__descendant_of": node_path})
+            return self.filter(**{f"{field_name}__descendant_of": node_path}).exclude(pk=node.pk)
         return self.filter(**{f"{field_name}__startswith": node_path + "."})
 
     def siblings_of(self, node):
