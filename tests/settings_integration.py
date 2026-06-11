@@ -45,6 +45,9 @@ DATABASES = {
         "PASSWORD": os.environ.get("CLADE_DB_PASSWORD", ""),
         "HOST": os.environ.get("CLADE_DB_HOST", "localhost"),
         "PORT": os.environ.get("CLADE_DB_PORT", "5432"),
+        "TEST": {
+            "NAME": "test_clade_test",
+        },
     }
 }
 
