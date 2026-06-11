@@ -6,6 +6,12 @@
 #                     API and query patterns (startswith, path__in) are
 #                     identical across backends — only the DDL differs.
 #
+#                     Registers two PostgreSQL-native lookups:
+#                       - descendant_of  →  path <@ rhs
+#                       - ancestor_of    →  path @> rhs
+#                     These lookups are used exclusively by NodeQuerySet
+#                     on PostgreSQL. They are never called on other backends.
+#
 # ConditionalAlterField
 #                     Migration operation that executes an AlterField only
 #                     on backends that support the target field type.
@@ -20,6 +26,7 @@ from __future__ import annotations
 from typing import Literal
 
 from django.db import migrations, models
+from django.db.models import Lookup
 
 
 class LtreeField(models.CharField):
@@ -37,10 +44,14 @@ class LtreeField(models.CharField):
     On all other backends (SQLite, MySQL, …), the field behaves as a
     plain ``VARCHAR``.
 
+    Exactly one ``LtreeField`` is allowed per ``CladeNode`` subclass.
+    ``NodeQuerySet`` locates it dynamically via ``_meta.get_fields()``
+    so the field may be renamed in subclasses without breaking clade.
+
     Usage
     -----
-    Used exclusively on ``CladeNode.path``.  Do not instantiate directly
-    in user code — the field is managed by the module.
+    Declared once on ``CladeNode.path`` — managed by the module.
+    Do not instantiate directly in user code.
     """
 
     def db_type(self, connection) -> str:
@@ -77,6 +88,52 @@ class LtreeField(models.CharField):
         name, path, args, kwargs = super().deconstruct()
         path = "clade.fields.LtreeField"
         return name, path, args, kwargs
+
+
+# =============================================================================
+# PostgreSQL-native ltree lookups — used exclusively by NodeQuerySet.
+#
+# These lookups translate directly to ltree operators and contain no
+# Python-level logic. The backend dispatch (when to use them vs the
+# fallback strategies) is the sole responsibility of NodeQuerySet.
+#
+# DescendantOf  path <@ rhs   — "is path a descendant of rhs?"
+# AncestorOf    path @> rhs   — "is path an ancestor of rhs?"
+# =============================================================================
+
+
+class DescendantOf(Lookup):
+    """PostgreSQL ltree lookup: path <@ rhs (path is descendant of rhs).
+
+    Used by ``NodeQuerySet.descendants_of()`` on PostgreSQL only.
+    Never call this lookup directly — use ``NodeQuerySet`` instead.
+    """
+
+    lookup_name = "descendant_of"
+
+    def as_sql(self, compiler, connection):
+        lhs, lhs_params = self.process_lhs(compiler, connection)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        return f"{lhs} <@ {rhs}", lhs_params + rhs_params
+
+
+class AncestorOf(Lookup):
+    """PostgreSQL ltree lookup: path @> rhs (path is ancestor of rhs).
+
+    Used by ``NodeQuerySet.ancestors_of()`` on PostgreSQL only.
+    Never call this lookup directly — use ``NodeQuerySet`` instead.
+    """
+
+    lookup_name = "ancestor_of"
+
+    def as_sql(self, compiler, connection):
+        lhs, lhs_params = self.process_lhs(compiler, connection)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        return f"{lhs} @> {rhs}", lhs_params + rhs_params
+
+
+LtreeField.register_lookup(DescendantOf)
+LtreeField.register_lookup(AncestorOf)
 
 
 class ConditionalAlterField(migrations.AlterField):
