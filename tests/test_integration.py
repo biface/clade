@@ -19,7 +19,6 @@ import pytest
 
 from tests.models import SimpleNode
 
-
 # =============================================================================
 # Reference tree fixture
 # =============================================================================
@@ -71,9 +70,7 @@ def test_ltree_extension_enabled(db):
     from django.db import connection
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT 1 FROM pg_extension WHERE extname = 'ltree';"
-        )
+        cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'ltree';")
         result = cursor.fetchone()
 
     assert result is not None, (
@@ -88,20 +85,18 @@ def test_path_field_type_is_ltree(db):
     from django.db import connection
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT data_type
             FROM information_schema.columns
             WHERE table_name = 'tests_simplenode'
               AND column_name = 'path';
-            """
-        )
+            """)
         result = cursor.fetchone()
 
     assert result is not None, "Column path not found on tests_simplenode."
-    assert result[0] == "USER-DEFINED", (
-        f"Expected ltree (USER-DEFINED) column type, got {result[0]}."
-    )
+    assert (
+        result[0] == "USER-DEFINED"
+    ), f"Expected ltree (USER-DEFINED) column type, got {result[0]}."
 
 
 # =============================================================================
@@ -171,9 +166,7 @@ def test_ancestors_of_deep_node(pg_tree):
 def test_ancestors_ordered_by_path(pg_tree):
     """ancestors_of(G).order_by('path') returns [A, B, D] on PostgreSQL."""
     t = pg_tree
-    ancestors = list(
-        SimpleNode.objects.ancestors_of(t["G"]).order_by("path")
-    )
+    ancestors = list(SimpleNode.objects.ancestors_of(t["G"]).order_by("path"))
     assert ancestors == [t["A"], t["B"], t["D"]]
 
 
