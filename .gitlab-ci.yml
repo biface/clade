@@ -145,8 +145,9 @@ bandit:
   before_script:
     - pip install --quiet uv
     - uv pip install --system tox tox-uv
-  # ── TODO v0.3.0: PostgreSQL service (ltree backend) ──────────────────────
-  # Uncomment when activating DD-003 (PostgreSQL + ltree).
+  # ── TODO v1.0.0: PostgreSQL service (integration-ci scheduled pipeline) ──
+  # Activated at v1.0.0 in the dedicated integration-ci job below (DD-011).
+  # Never uncomment here — the push pipeline always uses SQLite.
   #
   # services:
   #   - postgres:16-alpine
@@ -159,29 +160,26 @@ bandit:
   #   DATABASE_URL:      "postgresql://clade:clade@postgres/clade_test"
   # ─────────────────────────────────────────────────────────────────────────
 
-  # TODO v0.2.0: remove "|| [ $? -eq 5 ]" once the first real test is collected.
-  # Exit code 5 = pytest found no tests — acceptable during scaffolding phase.
-
 # Django 5.2 LTS — Python 3.10
 test-py310:
   extends: .test_base
   image: python:3.10
   script:
-    - tox -e py310 || [ $? -eq 5 ]
+    - tox -e py310
 
 # Django 5.2 LTS — Python 3.11
 test-py311:
   extends: .test_base
   image: python:3.11
   script:
-    - tox -e py311 || [ $? -eq 5 ]
+    - tox -e py311
 
 # Django 5.2 LTS — Python 3.12
 test-py312:
   extends: .test_base
   image: python:3.12
   script:
-    - tox -e py312 || [ $? -eq 5 ]
+    - tox -e py312
   after_script:
     # Upload partial coverage to Codecov (flag: python version).
     # Codecov waits for after_n_builds reports before publishing the final result
@@ -194,7 +192,7 @@ test-py313:
   extends: .test_base
   image: python:3.13
   script:
-    - tox -e py313 || [ $? -eq 5 ]
+    - tox -e py313
   after_script:
     - pip install --quiet codecov-cli
     - codecovcli upload-process --git-service gitlab --flag py313 || true
@@ -241,6 +239,41 @@ migrations:
 #   allow_failure: true
 #   script:
 #     - tox -e py314-djlatest
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── TODO v1.0.0: integration-ci scheduled pipeline ───────────────────────────
+# Activate at v1.0.0 by uncommenting this job and creating a GitLab pipeline
+# schedule targeting main (CI/CD → Schedules).
+# Requires: CLADE_DB_PASSWORD (masked, NOT protected — Settings → CI/CD → Variables)
+# Uses: tox -e integration-ci (settings_integration.py, password via env var)
+# Refs: DD-011 (#32), DD-003 (#3)
+#
+# integration-ci:
+#   stage: test
+#   image: python:3.12
+#   rules:
+#     - if: '$CI_PIPELINE_SOURCE == "schedule"'
+#   needs:
+#     - basedpyright
+#     - flake8
+#     - black-check
+#     - isort-check
+#     - bandit
+#   services:
+#     - postgres:16-alpine
+#   variables:
+#     POSTGRES_DB:       clade_test
+#     POSTGRES_USER:     clade_dev
+#     POSTGRES_PASSWORD: "$CLADE_DB_PASSWORD"
+#     POSTGRES_HOST_AUTH_METHOD: md5
+#   before_script:
+#     - pip install --quiet uv
+#     - uv pip install --system tox tox-uv
+#     - CLADE_DB_HOST=postgres CLADE_DB_USER=clade_dev CLADE_DB_NAME=clade_test
+#         CLADE_DB_PASSWORD="$CLADE_DB_PASSWORD"
+#         psql -h postgres -U clade_dev -d clade_test -c "CREATE EXTENSION IF NOT EXISTS ltree;"
+#   script:
+#     - tox -e integration-ci
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage: build ─────────────────────────────────────────────────────────────
