@@ -150,6 +150,7 @@ addopts                = [
     "--import-mode=importlib",
     "--no-migrations",    # tables created directly from models (fast)
                           # migration validation: tox -e migrations (staging MR)
+    "-m", "not integration",  # integration tests require PostgreSQL — run via tox -e integration
     "-v",
 ]
 markers = [
