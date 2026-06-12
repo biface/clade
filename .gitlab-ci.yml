@@ -4,10 +4,11 @@
 #
 # Pipeline structure
 # ──────────────────
-#   quality   Lint, type-check, security analysis    every push + MR
-#   test      pytest matrix (Django 5.2 × py310–313) every push + MR, after quality
-#   build     version check + package build           version tags only, after quality + test
-#   publish   TestPyPI (rc tags) / PyPI (final tags)  after build
+#   quality       Lint, type-check, security analysis    every push + MR
+#   test          pytest matrix (Django 5.2 × py310–313) every push + MR, after quality
+#   test          integration-ci (PostgreSQL + ltree)     version tags + schedule
+#   build         version check + package build           version tags only, after quality + test + integration-ci
+#   publish       TestPyPI (rc tags) / PyPI (final tags)  after build
 #
 # Release creation (DD-010 Stage 1): manual via GitLab UI.
 # Automated release-cli job deferred to Stage 2 (v0.5.0).
@@ -241,39 +242,57 @@ migrations:
 #     - tox -e py314-djlatest
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── TODO v1.0.0: integration-ci scheduled pipeline ───────────────────────────
-# Activate at v1.0.0 by uncommenting this job and creating a GitLab pipeline
-# schedule targeting main (CI/CD → Schedules).
+# ── integration-ci — PostgreSQL integration tests ────────────────────────────
+# Runs on every version tag (final and rc) and on scheduled pipelines.
+#
+# Trigger on tags  : validates ltree backend before any PyPI publication.
+# Trigger on schedule : ongoing quality gate on main (activate at v1.0.0,
+#                       CI/CD → Schedules, targeting main branch).
+#
 # Requires: CLADE_DB_PASSWORD (masked, NOT protected — Settings → CI/CD → Variables)
 # Uses: tox -e integration-ci (settings_integration.py, password via env var)
-# Refs: DD-011 (#32), DD-003 (#3)
+# Refs: DD-003 (#3), DD-011 (#32), DD-015
 #
-# integration-ci:
-#   stage: test
-#   image: python:3.12
-#   rules:
-#     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-#   needs:
-#     - basedpyright
-#     - flake8
-#     - black-check
-#     - isort-check
-#     - bandit
-#   services:
-#     - postgres:16-alpine
-#   variables:
-#     POSTGRES_DB:       clade_test
-#     POSTGRES_USER:     clade_dev
-#     POSTGRES_PASSWORD: "$CLADE_DB_PASSWORD"
-#     POSTGRES_HOST_AUTH_METHOD: md5
-#   before_script:
-#     - pip install --quiet uv
-#     - uv pip install --system tox tox-uv
-#     - CLADE_DB_HOST=postgres CLADE_DB_USER=clade_dev CLADE_DB_NAME=clade_test
-#         CLADE_DB_PASSWORD="$CLADE_DB_PASSWORD"
-#         psql -h postgres -U clade_dev -d clade_test -c "CREATE EXTENSION IF NOT EXISTS ltree;"
-#   script:
-#     - tox -e integration-ci
+# PostgreSQL setup
+# ────────────────
+# The ltree extension must be enabled on the test database template.
+# Django clones template1 to create test_clade_test — ltree is inherited.
+# postgresql-client is installed in before_script (lightweight, keeps python:3.12
+# as the base image consistent with the rest of the pipeline).
+
+integration-ci:
+  stage: test
+  image: python:3.12
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
+  needs:
+    - basedpyright
+    - flake8
+    - black-check
+    - isort-check
+    - bandit
+  services:
+    - postgres:16-alpine
+  variables:
+    POSTGRES_DB:                clade_test
+    POSTGRES_USER:              clade_dev
+    POSTGRES_PASSWORD:          "$CLADE_DB_PASSWORD"
+    POSTGRES_HOST_AUTH_METHOD:  md5
+    CLADE_DB_HOST:              postgres
+    CLADE_DB_USER:              clade_dev
+    CLADE_DB_NAME:              clade_test
+    CLADE_DB_PASSWORD:          "$CLADE_DB_PASSWORD"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq postgresql-client
+    - pip install --quiet uv
+    - uv pip install --system tox tox-uv
+    # Enable ltree on clade_test — Django clones it as template for test_clade_test
+    # (settings_integration.py TEST.TEMPLATE = clade_test).
+    - PGPASSWORD="$CLADE_DB_PASSWORD" psql -h postgres -U clade_dev -d clade_test
+        -c "CREATE EXTENSION IF NOT EXISTS ltree;"
+  script:
+    - tox -e integration-ci
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage: build ─────────────────────────────────────────────────────────────
@@ -295,6 +314,7 @@ build:
     - test-py311
     - test-py312
     - test-py313
+    - integration-ci
   before_script:
     - pip install build packaging
   script:
