@@ -182,11 +182,17 @@ test-py312:
   script:
     - tox -e py312
   after_script:
-    # Upload partial coverage to Codecov (flag: python version).
-    # Codecov waits for after_n_builds reports before publishing the final result
-    # (configured in .codecov.yml: after_n_builds: 2, one per uploading job).
-    - pip install --quiet codecov-cli
-    - codecovcli upload-process --git-service gitlab --flag py312 || true
+    # Coverage + Codecov upload on push/MR targeting main only.
+    # tox -e coverage generates coverage/coverage.xml (pyproject.toml).
+    # Codecov waits for after_n_builds reports before publishing (after_n_builds: 2).
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ] || [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "main" ]; then
+        pip install --quiet uv && uv pip install --system tox tox-uv
+        tox -e coverage
+        pip install --quiet codecov-cli
+        codecovcli upload-process --git-service gitlab --flag py312 \
+          --coverage-files coverage/coverage.xml || true
+      fi
 
 # Django 5.2 LTS — Python 3.13
 test-py313:
@@ -195,8 +201,14 @@ test-py313:
   script:
     - tox -e py313
   after_script:
-    - pip install --quiet codecov-cli
-    - codecovcli upload-process --git-service gitlab --flag py313 || true
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ] || [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "main" ]; then
+        pip install --quiet uv && uv pip install --system tox tox-uv
+        tox -e coverage
+        pip install --quiet codecov-cli
+        codecovcli upload-process --git-service gitlab --flag py313 \
+          --coverage-files coverage/coverage.xml || true
+      fi
 
 # Migration validation — MR targeting staging branch only (DD-011)
 # Runs the full Django migration machinery (no --no-migrations).
@@ -289,11 +301,11 @@ integration-ci:
     - uv pip install --system tox tox-uv
     # Enable ltree on template1 so Django inherits it when cloning the test database.
     # Requires the postgres superuser — trust auth allows passwordless connection.
-    - psql -h postgres -U clade_dev -d template1
-      -c "CREATE EXTENSION IF NOT EXISTS ltree;"
+    - psql -h postgres -U postgres -d template1
+        -c "CREATE EXTENSION IF NOT EXISTS ltree;"
     # Also enable on clade_test for completeness.
-    - psql -h postgres -U clade_dev -d clade_test
-      -c "CREATE EXTENSION IF NOT EXISTS ltree;"
+    - psql -h postgres -U postgres -d clade_test
+        -c "CREATE EXTENSION IF NOT EXISTS ltree;"
   script:
     - tox -e integration-ci
 # ─────────────────────────────────────────────────────────────────────────────
