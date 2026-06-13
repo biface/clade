@@ -89,4 +89,4 @@ comment:
 # -----------------------------------------------------------------------------
 codecov:
   notify:
-    after_n_builds: 4    # 4 active jobs: py310-313 × dj52 (djlatest activated at v0.9.0)
+    after_n_builds: 2    # py312 + py313 only (py310, py311 do not upload)
