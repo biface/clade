@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] — 2026-06-13
+
+### Added
+- `LtreeField` — custom `CharField` subclass; returns `ltree` on PostgreSQL,
+  `varchar(N)` on all other backends; registers `ancestor_of` (`@>`) and
+  `descendant_of` (`<@`) lookups (DD-015)
+- `ConditionalAlterField` — custom migration operation; executes
+  `ALTER COLUMN … TYPE ltree` on PostgreSQL only, no-op on other backends (DD-015)
+- `NodeQuerySet` PostgreSQL dispatch — `ancestors_of` and `descendants_of` use
+  native ltree operators on PostgreSQL, `__in` / `__startswith` fallback elsewhere
+- Integration test suite — 26 parity tests SQLite vs PostgreSQL
+  (`test_integration.py`, `test_hierarchy_pg_dispatch.py`)
+- `tests/settings_integration.py` — dedicated Django settings for integration tests,
+  credentials injected via `CLADE_DB_*` environment variables
+- `tox -e integration` and `tox -e integration-ci` environments (DD-011)
+- CI `integration-ci` job — PostgreSQL 16 service, ltree on `template1`,
+  triggered on version tags and scheduled pipelines
+
+### Changed
+- `CladeNode.path` field type updated from `CharField` to `LtreeField` (DD-015)
+- `pyproject.toml`: `passenv` added to `integration-ci` for `CLADE_DB_*` variables
+- `.gitlab-ci.yml`: `POSTGRES_HOST_AUTH_METHOD` set to `trust`; ltree enabled on
+  `template1` before Django creates the test database
+
+### Fixed
+- ltree operators `@>` / `<@` are inclusive — `.exclude(pk=node.pk)` added to
+  `ancestors_of` and `descendants_of` PostgreSQL branches
+
+---
+
 ## [0.2.0] — 2026-05-14
 
 ### Added
@@ -63,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.2.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.3.0...HEAD
+[0.3.0]: https://gitlab.com/open-works/clade/-/releases/v0.3.0
 [0.2.0]: https://gitlab.com/open-works/clade/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/open-works/clade/-/releases/v0.1.0
 [0.0.5]: https://gitlab.com/open-works/clade/-/releases/v0.0.5

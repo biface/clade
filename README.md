@@ -12,12 +12,12 @@
 
 ## Status
 
-**Pre-alpha** — `v0.2.0` published. API not yet stable.
+**Pre-alpha** — `v0.3.0` published. API not yet stable.
 
 | Version | Status | Content |
 |---|---|---|
-| `v0.2.0` | ✅ Current | `CladeNode`, path maintenance, hierarchy queries, ADOPT deletion |
-| `v0.3.0` | 🔄 Next | PostgreSQL + ltree backend |
+| `v0.3.0` | ✅ Current | `LtreeField`, PostgreSQL ltree backend, backend dispatch, integration tests |
+| `v0.4.0` | 🔄 Next | Extended kinship (pibling, nibling, cousin) |
 
 See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and
 [open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the
