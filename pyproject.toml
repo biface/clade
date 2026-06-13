@@ -398,6 +398,7 @@ description         = "Integration tests — CI (password via CLADE_DB_PASSWORD 
 base_python         = "python3.12"
 deps                = ["-r {toxinidir}/.tox-config/requirements/integration.txt"]
 setenv              = { DJANGO_SETTINGS_MODULE = "tests.settings_integration" }
+passenv             = ["CLADE_DB_NAME", "CLADE_DB_USER", "CLADE_DB_PASSWORD", "CLADE_DB_HOST", "CLADE_DB_PORT"]
 allowlist_externals = ["bash"]
 commands            = [
     ["bash", "-c", "pytest -m integration -v || [ $? -eq 5 ]"],
