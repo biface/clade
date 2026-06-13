@@ -278,7 +278,7 @@ integration-ci:
     POSTGRES_DB:                clade_test
     POSTGRES_USER:              clade_dev
     POSTGRES_PASSWORD:          "$CLADE_DB_PASSWORD"
-    POSTGRES_HOST_AUTH_METHOD:  md5
+    POSTGRES_HOST_AUTH_METHOD:  trust
     CLADE_DB_HOST:              postgres
     CLADE_DB_USER:              clade_dev
     CLADE_DB_NAME:              clade_test
@@ -287,9 +287,12 @@ integration-ci:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - pip install --quiet uv
     - uv pip install --system tox tox-uv
-    # Enable ltree on clade_test — Django clones it as template for test_clade_test
-    # (settings_integration.py TEST.TEMPLATE = clade_test).
-    - PGPASSWORD="$CLADE_DB_PASSWORD" psql -h postgres -U clade_dev -d clade_test
+    # Enable ltree on template1 so Django inherits it when cloning the test database.
+    # Requires the postgres superuser — trust auth allows passwordless connection.
+    - psql -h postgres -U postgres -d template1
+        -c "CREATE EXTENSION IF NOT EXISTS ltree;"
+    # Also enable on clade_test for completeness.
+    - psql -h postgres -U postgres -d clade_test
         -c "CREATE EXTENSION IF NOT EXISTS ltree;"
   script:
     - tox -e integration-ci
