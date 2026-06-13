@@ -1,7 +1,7 @@
 # =============================================================================
 # clade/models.py — CladeNode abstract base class.
 #
-# Refs: DD-001 (#1), DD-012 (#39), DD-013 (#40)
+# Refs: DD-001 (#1), DD-012 (#39), DD-013 (#40), DD-015
 #   #42  model structure
 #   #45  NodeManager wiring
 #   #46  instance convenience methods
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from django.db import models
 
+from clade.fields import LtreeField
 from clade.managers import NodeManager
 
 
@@ -32,9 +33,9 @@ class CladeNode(models.Model):
         Direct ancestor.  ``None`` for root nodes.
         ``on_delete`` defaults to ``CASCADE``; override with
         ``clade.deletion.ADOPT`` to re-parent children on deletion.
-    path : CharField
+    path : LtreeField
         Dot-separated integer PK chain (e.g. ``"1.2.4.6"``).
-        Compatible with PostgreSQL ltree.
+        Stored as ``ltree`` on PostgreSQL, ``VARCHAR`` elsewhere.
         Populated automatically by the post_save signal (clade.signals).
         **Do not write directly.**
 
@@ -74,7 +75,7 @@ class CladeNode(models.Model):
         related_name="children",
         verbose_name="parent",
     )
-    path = models.CharField(
+    path = LtreeField(
         max_length=255,
         blank=True,
         editable=False,

@@ -22,11 +22,11 @@
 
 ## Options considered
 
-| Option | Advantage | Risk |
-|---|---|---|
-| **A** — | | |
-| **B** — | | |
-| **C** — | | |
+| Option  | Advantage | Risk |
+|---------|-----------|------|
+| **A** — |           |      |
+| **B** — |           |      |
+| **C** — |           |      |
 
 ---
 
