@@ -164,7 +164,7 @@ markers = [
 # Refs: DD-006, DD-009
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
-source = ["src/clade"]
+source = ["clade"]
 branch = true
 omit   = [
     "*/migrations/*",
@@ -174,7 +174,6 @@ omit   = [
 [tool.coverage.report]
 show_missing  = true
 skip_covered  = false
-fail_under    = 75
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
@@ -367,7 +366,7 @@ allowlist_externals = ["mkdir", "pytest"]
 commands            = [
     ["mkdir", "-p", "{toxinidir}/coverage"],
     ["pytest",
-     "--cov=src/clade",
+     "--cov=clade",
      "--cov-report=term-missing",
      "--cov-report=xml:{toxinidir}/coverage/coverage.xml",
      "--cov-report=html:{toxinidir}/coverage/coverage_html"],

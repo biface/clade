@@ -281,7 +281,7 @@ integrate:postgresql:
 #
 # tox -e coverage runs a full pytest pass with --cov on py312 (coverage-version.txt).
 # Produces coverage/coverage.xml uploaded to codecov.io.
-# after_n_builds: 2 in .codecov.yml — one upload per uploading job (py312 only).
+# after_n_builds: 1 in .codecov.yml — cover:py312 is the sole upload job.
 #
 # Refs: DD-006 (#6), DD-009 (#9)
 
@@ -300,7 +300,7 @@ cover:py312:
   after_script:
     - pip install --quiet codecov-cli
     - codecovcli upload-process --git-service gitlab --flag py312
-        --coverage-files-search-direct-file coverage/coverage.xml || true
+        --coverage-files-search-root-folder coverage/ || true
   artifacts:
     name: "coverage-$CI_COMMIT_SHORT_SHA"
     paths:
