@@ -89,4 +89,4 @@ comment:
 # -----------------------------------------------------------------------------
 codecov:
   notify:
-    after_n_builds: 2    # py312 + py313 only (py310, py311 do not upload)
+    after_n_builds: 1    # cover:py312 is the sole upload job

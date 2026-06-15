@@ -300,7 +300,7 @@ cover:py312:
   after_script:
     - pip install --quiet codecov-cli
     - codecovcli upload-process --git-service gitlab --flag py312
-        --coverage-files coverage/coverage.xml || true
+        --coverage-files-search-direct-file coverage/coverage.xml || true
   artifacts:
     name: "coverage-$CI_COMMIT_SHORT_SHA"
     paths:
