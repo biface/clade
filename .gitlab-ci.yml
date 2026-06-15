@@ -4,11 +4,18 @@
 #
 # Pipeline structure
 # ──────────────────
-#   quality       Lint, type-check, security analysis    every push + MR
-#   test          pytest matrix (Django 5.2 × py310–313) every push + MR, after quality
-#   test          integration-ci (PostgreSQL + ltree)     version tags + schedule
-#   build         version check + package build           version tags only, after quality + test + integration-ci
-#   publish       TestPyPI (rc tags) / PyPI (final tags)  after build
+#   check       Quality analysis (flake8, black, isort, basedpyright, bandit)
+#               every push + MR
+#   test        pytest matrix (Django 5.2 × py310–313) + migrations
+#               every push + MR, after check
+#   integrate   PostgreSQL + ltree backend validation
+#               version tags + scheduled pipelines
+#   cover       Coverage report (py312) + Codecov upload
+#               main branch, MR→main, version tags
+#   build       Version consistency check + package build
+#               version tags only, after check + test + integrate + cover
+#   publish     TestPyPI (rc tags) / PyPI (final tags)
+#               after build
 #
 # Release creation (DD-010 Stage 1): manual via GitLab UI.
 # Automated release-cli job deferred to Stage 2 (v0.5.0).
@@ -19,30 +26,27 @@
 #   v0.9.0            Django 5.2 + 6.x      Python 3.12–3.14  (djlatest, see below)
 #   v1.0.0            Django 5.2 + 6.x      Python 3.12–3.14
 #
-# Database services
-# ─────────────────
-#   v0.1.0 → v0.2.0  SQLite in-memory (pytest-django DATABASES setting)
-#   v0.3.0 →          PostgreSQL service required (ltree backend)
-#                     → Uncomment the `services:` block in .test_base
-#
 # Required CI/CD variables (Settings → CI/CD → Variables)
 # ────────────────────────────────────────────────────────
 #   CODECOV_TOKEN        masked, NOT protected (inject in all pipelines)
+#   CLADE_DB_PASSWORD    masked, NOT protected (inject in all pipelines)
 #   PYPI_API_TOKEN       masked, protected     (inject on protected tags v* only)
 #   TEST_PYPI_API_TOKEN  masked, protected     (inject on protected tags v* only)
 #
 # =============================================================================
 
 stages:
-  - quality
+  - check
   - test
+  - integrate
+  - cover
   - build
   - publish
 
 # ─── Shared templates ─────────────────────────────────────────────────────────
 
 # Base image: python:3.12 full (not slim).
-# Reason: Pyright requires libatomic1, absent from python:*-slim images.
+# Reason: basedpyright requires libatomic1, absent from python:*-slim images.
 .tox_setup:
   image: python:3.12
   before_script:
@@ -62,38 +66,45 @@ stages:
     - if: '$CI_PIPELINE_SOURCE == "push"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
-# Any version tag: final (v0.2.0) or release candidate (v0.2.0rc1).
+# Any version tag: final (v0.3.0) or release candidate (v0.3.0rc1).
 .rules_any_version_tag:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
 
-# Release candidates only (v0.2.0rc1, v0.3.0rc2, …).
+# Release candidates only (v0.3.0rc1, v0.4.0rc2, …).
 .rules_rc_tag:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+rc\d+$/'
 
-# Final releases only (v0.2.0, v0.3.0, …) — no rc suffix.
+# Final releases only (v0.3.0, v0.4.0, …) — no rc suffix.
 .rules_final_tag:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
 
-# ─── Stage: quality ───────────────────────────────────────────────────────────
+# main branch (push or MR) and version tags.
+.rules_main_or_tag:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
+
+# ─── Stage: check ─────────────────────────────────────────────────────────────
 # Runs on every push and MR. All five jobs run in parallel.
 # Tool names mirror the ndict-tools tox environment names exactly.
 
-.quality_base:
+.check_base:
   extends:
     - .tox_setup
     - .rules_on_push
-  stage: quality
+  stage: check
 
-basedpyright:
-  extends: .quality_base
+check:basedpyright:
+  extends: .check_base
   script:
     - tox -e basedpyright
 
-flake8:
-  extends: .quality_base
+check:flake8:
+  extends: .check_base
   script:
     - tox -e flake8
   artifacts:
@@ -103,127 +114,86 @@ flake8:
       - .tox/flake8/log/
     expire_in: 30 days
 
-black-check:
-  extends: .quality_base
+check:black:
+  extends: .check_base
   script:
     - tox -e black-check
 
-isort-check:
-  extends: .quality_base
+check:isort:
+  extends: .check_base
   script:
     - tox -e isort-check
 
-bandit:
-  extends: .quality_base
+check:bandit:
+  extends: .check_base
   script:
     - tox -e bandit
 
 # ─── Stage: test ──────────────────────────────────────────────────────────────
-# Runs on every push and MR, after the quality stage has passed.
+# Runs on every push and MR, after the check stage has passed.
 # Each job targets a specific Python interpreter; Django 5.2 LTS is implicit
 # in the tox environment definition (pyproject.toml).
 #
-# Framework integration
-# ─────────────────────
 # pytest-django reads DJANGO_SETTINGS_MODULE from pyproject.toml
 # ([tool.pytest.ini_options]). No explicit env var is required here.
 #
-# TODO v1.0.0 — PostgreSQL service (scheduled integration pipeline only)
 # The push pipeline always uses SQLite (standard tests, see DD-011).
-# This block is activated at v1.0.0 in a dedicated scheduled job on main,
-# not here. Do not uncomment in the push pipeline.
+# PostgreSQL integration is handled by the dedicated integrate:postgresql job.
 
 .test_base:
-  extends:
-    - .rules_on_push
+  extends: .rules_on_push
   stage: test
   needs:
-    - basedpyright
-    - flake8
-    - black-check
-    - isort-check
-    - bandit
+    - check:basedpyright
+    - check:flake8
+    - check:black
+    - check:isort
+    - check:bandit
   before_script:
     - pip install --quiet uv
     - uv pip install --system tox tox-uv
-  # ── TODO v1.0.0: PostgreSQL service (integration-ci scheduled pipeline) ──
-  # Activated at v1.0.0 in the dedicated integration-ci job below (DD-011).
-  # Never uncomment here — the push pipeline always uses SQLite.
-  #
-  # services:
-  #   - postgres:16-alpine
-  #
-  # variables:
-  #   POSTGRES_DB:       clade_test
-  #   POSTGRES_USER:     clade
-  #   POSTGRES_PASSWORD: clade
-  #   POSTGRES_HOST:     postgres
-  #   DATABASE_URL:      "postgresql://clade:clade@postgres/clade_test"
-  # ─────────────────────────────────────────────────────────────────────────
 
 # Django 5.2 LTS — Python 3.10
-test-py310:
+test:py310:
   extends: .test_base
   image: python:3.10
   script:
     - tox -e py310
 
 # Django 5.2 LTS — Python 3.11
-test-py311:
+test:py311:
   extends: .test_base
   image: python:3.11
   script:
     - tox -e py311
 
 # Django 5.2 LTS — Python 3.12
-test-py312:
+test:py312:
   extends: .test_base
   image: python:3.12
   script:
     - tox -e py312
-  after_script:
-    # Coverage + Codecov upload on push/MR targeting main only.
-    # tox -e coverage generates coverage/coverage.xml (pyproject.toml).
-    # Codecov waits for after_n_builds reports before publishing (after_n_builds: 2).
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "main" ] || [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "main" ]; then
-        pip install --quiet uv && uv pip install --system tox tox-uv
-        tox -e coverage
-        pip install --quiet codecov-cli
-        codecovcli upload-process --git-service gitlab --flag py312 \
-          --coverage-files coverage/coverage.xml || true
-      fi
 
 # Django 5.2 LTS — Python 3.13
-test-py313:
+test:py313:
   extends: .test_base
   image: python:3.13
   script:
     - tox -e py313
-  after_script:
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "main" ] || [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "main" ]; then
-        pip install --quiet uv && uv pip install --system tox tox-uv
-        tox -e coverage
-        pip install --quiet codecov-cli
-        codecovcli upload-process --git-service gitlab --flag py313 \
-          --coverage-files coverage/coverage.xml || true
-      fi
 
 # Migration validation — MR targeting staging branch only (DD-011)
 # Runs the full Django migration machinery (no --no-migrations).
 # Guarantees migrations are correct before reaching production.
-migrations:
-  extends:
-    - .tox_setup
+test:migrations:
+  extends: .tox_setup
   stage: test
   image: python:3.12
   needs:
-    - basedpyright
-    - flake8
-    - black-check
-    - isort-check
-    - bandit
+    - check:basedpyright
+    - check:flake8
+    - check:black
+    - check:isort
+    - check:bandit
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^staging/'
   script:
@@ -234,19 +204,19 @@ migrations:
 # pyproject.toml ([tool.tox] env_list) and .tox-config/versions.txt.
 # Python 3.14 is experimental — allow_failure: true is intentional.
 #
-# test-py312-djlatest:
+# test:py312-djlatest:
 #   extends: .test_base
 #   image: python:3.12
 #   script:
 #     - tox -e py312-djlatest
 #
-# test-py313-djlatest:
+# test:py313-djlatest:
 #   extends: .test_base
 #   image: python:3.13
 #   script:
 #     - tox -e py313-djlatest
 #
-# test-py314-djlatest:
+# test:py314-djlatest:
 #   extends: .test_base
 #   image: python:3.14-rc
 #   allow_failure: true
@@ -254,36 +224,34 @@ migrations:
 #     - tox -e py314-djlatest
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── integration-ci — PostgreSQL integration tests ────────────────────────────
+# ─── Stage: integrate ─────────────────────────────────────────────────────────
+# PostgreSQL + ltree backend validation.
 # Runs on every version tag (final and rc) and on scheduled pipelines.
 #
-# Trigger on tags  : validates ltree backend before any PyPI publication.
+# Trigger on tags     : validates ltree backend before any PyPI publication.
 # Trigger on schedule : ongoing quality gate on main (activate at v1.0.0,
 #                       CI/CD → Schedules, targeting main branch).
 #
-# Requires: CLADE_DB_PASSWORD (masked, NOT protected — Settings → CI/CD → Variables)
-# Uses: tox -e integration-ci (settings_integration.py, password via env var)
-# Refs: DD-003 (#3), DD-011 (#32), DD-015
-#
 # PostgreSQL setup
 # ────────────────
-# The ltree extension must be enabled on the test database template.
-# Django clones template1 to create test_clade_test — ltree is inherited.
-# postgresql-client is installed in before_script (lightweight, keeps python:3.12
-# as the base image consistent with the rest of the pipeline).
+# ltree must be enabled on template1 — Django clones it to create test_clade_test.
+# trust auth allows the clade_dev superuser to connect without a password.
+# postgresql-client installed in before_script (keeps python:3.12 as base image).
+#
+# Refs: DD-003 (#3), DD-011 (#32), DD-015
 
-integration-ci:
-  stage: test
+integrate:postgresql:
+  stage: integrate
   image: python:3.12
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
   needs:
-    - basedpyright
-    - flake8
-    - black-check
-    - isort-check
-    - bandit
+    - check:basedpyright
+    - check:flake8
+    - check:black
+    - check:isort
+    - check:bandit
   services:
     - postgres:16-alpine
   variables:
@@ -299,37 +267,68 @@ integration-ci:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - pip install --quiet uv
     - uv pip install --system tox tox-uv
-    # Enable ltree on template1 so Django inherits it when cloning the test database.
-    # Requires the postgres superuser — trust auth allows passwordless connection.
-    - psql -h postgres -U postgres -d template1
+    # Enable ltree on template1 — inherited by test_clade_test on clone.
+    - psql -h postgres -U clade_dev -d template1
         -c "CREATE EXTENSION IF NOT EXISTS ltree;"
-    # Also enable on clade_test for completeness.
-    - psql -h postgres -U postgres -d clade_test
+    - psql -h postgres -U clade_dev -d clade_test
         -c "CREATE EXTENSION IF NOT EXISTS ltree;"
   script:
     - tox -e integration-ci
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── Stage: cover ─────────────────────────────────────────────────────────────
+# Coverage report generation and Codecov upload.
+# Runs on main branch (push and MR) and on all version tags.
+#
+# tox -e coverage runs a full pytest pass with --cov on py312 (coverage-version.txt).
+# Produces coverage/coverage.xml uploaded to codecov.io.
+# after_n_builds: 2 in .codecov.yml — one upload per uploading job (py312 only).
+#
+# Refs: DD-006 (#6), DD-009 (#9)
+
+cover:py312:
+  extends:
+    - .tox_setup
+    - .rules_main_or_tag
+  stage: cover
+  needs:
+    - test:py310
+    - test:py311
+    - test:py312
+    - test:py313
+  script:
+    - tox -e coverage
+  after_script:
+    - pip install --quiet codecov-cli
+    - codecovcli upload-process --git-service gitlab --flag py312
+        --coverage-files coverage/coverage.xml || true
+  artifacts:
+    name: "coverage-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - coverage/coverage.xml
+      - coverage/coverage_html/
+    expire_in: 30 days
 
 # ─── Stage: build ─────────────────────────────────────────────────────────────
-# Runs on version tags only (final and rc), after quality + test have passed.
+# Runs on version tags only (final and rc), after all previous stages.
 # Checks version consistency across tag, pyproject.toml, and __init__.py,
 # then produces the source and wheel distributions.
 
-build:
+build:package:
   extends: .rules_any_version_tag
   stage: build
   image: python:3.12
   needs:
-    - basedpyright
-    - flake8
-    - black-check
-    - isort-check
-    - bandit
-    - test-py310
-    - test-py311
-    - test-py312
-    - test-py313
-    - integration-ci
+    - check:basedpyright
+    - check:flake8
+    - check:black
+    - check:isort
+    - check:bandit
+    - test:py310
+    - test:py311
+    - test:py312
+    - test:py313
+    - integrate:postgresql
+    - cover:py312
   before_script:
     - pip install build packaging
   script:
@@ -380,13 +379,13 @@ build:
 
 # ─── Stage: publish ───────────────────────────────────────────────────────────
 
-# Publish to TestPyPI — release candidates only (v0.2.0rc1, …)
+# Publish to TestPyPI — release candidates only (v0.3.0rc1, …)
 # Requires: TEST_PYPI_API_TOKEN (masked + protected, Settings → CI/CD → Variables)
-publish-testpypi:
+publish:testpypi:
   extends: .rules_rc_tag
   stage: publish
   image: python:3.12
-  needs: [build]
+  needs: [build:package]
   before_script:
     - pip install --quiet uv
   script:
@@ -412,13 +411,13 @@ publish-testpypi:
     name: testpypi
     url: https://test.pypi.org/project/django-clade/
 
-# Publish to PyPI — final releases only (v0.2.0, v0.3.0, …)
+# Publish to PyPI — final releases only (v0.3.0, v0.4.0, …)
 # Requires: PYPI_API_TOKEN (masked + protected, Settings → CI/CD → Variables)
-publish-pypi:
+publish:pypi:
   extends: .rules_final_tag
   stage: publish
   image: python:3.12
-  needs: [build]
+  needs: [build:package]
   before_script:
     - pip install --quiet uv
   script:
@@ -448,13 +447,13 @@ publish-pypi:
 # ─── DD-010 Stage 2 placeholder (v0.5.0) ──────────────────────────────────────
 # At v0.5.0, add a `release` job using release-cli that reads the CHANGELOG.md
 # section matching the tag and creates the GitLab release automatically.
-# Until then, create the release manually via the GitLab UI after publish-pypi.
+# Until then, create the release manually via the GitLab UI after publish:pypi.
 #
-# release:
+# publish:release:
 #   extends: .rules_final_tag
 #   stage: publish
 #   image: registry.gitlab.com/gitlab-org/release-cli:latest
-#   needs: [publish-pypi]
+#   needs: [publish:pypi]
 #   script:
 #     - |
 #       VERSION="${CI_COMMIT_TAG#v}"
