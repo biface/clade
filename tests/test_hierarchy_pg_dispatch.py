@@ -22,7 +22,7 @@
 #     │   └── E
 #     └── C
 #
-# Refs: DD-003 (#3), DD-013 (#40), DD-015, #45
+# Refs: DD-003 (#3), DD-013 (#40), DD-015, DD-016 (#56), #45, #62
 # =============================================================================
 
 from unittest.mock import MagicMock, patch
@@ -96,3 +96,55 @@ class TestDescendantsPostgresDispatch:
             qs = SimpleNode.objects.descendants_of(tree["B"])
             sql = str(qs.query)
         assert str(tree["B"].pk) in sql
+
+
+# =============================================================================
+# cousins_of — PostgreSQL dispatch (DD-016, #56, #62)
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestCousinsPostgresDispatch:
+    """cousins_of() selects the ltree <@ lookup + NLevel depth filter."""
+
+    def test_uses_descendant_of_lookup(self, tree):
+        """The generated SQL contains the <@ operator (ancestor-subtree filter)."""
+        with _pg_vendor_patch():
+            qs = SimpleNode.objects.cousins_of(tree["D"], degree=2)
+            sql = str(qs.query)
+        assert "<@" in sql
+
+    def test_excludes_closer_ancestor_branch(self, tree):
+        """The generated SQL negates the closer-ancestor <@ filter (NOT)."""
+        with _pg_vendor_patch():
+            qs = SimpleNode.objects.cousins_of(tree["D"], degree=2)
+            sql = str(qs.query)
+        assert "NOT" in sql
+
+    def test_uses_nlevel_for_depth_filter(self, tree):
+        """The generated SQL calls nlevel() for the exact-depth filter."""
+        with _pg_vendor_patch():
+            qs = SimpleNode.objects.cousins_of(tree["D"], degree=2)
+            sql = str(qs.query)
+        assert "nlevel" in sql.lower()
+
+    def test_degree_one_dispatches_without_error(self, tree):
+        """degree=1 (closer_ancestor_path == node_path) still dispatches to
+        the PostgreSQL branch without raising — the inclusive <@ operator
+        handles self-exclusion (see managers.py comment, DD-015 #55 bugfix).
+        """
+        with _pg_vendor_patch():
+            qs = SimpleNode.objects.cousins_of(tree["D"], degree=1)
+            sql = str(qs.query)
+        assert "<@" in sql
+        assert "nlevel" in sql.lower()
+
+    def test_queryset_not_evaluated(self, tree):
+        """Sanity check: inspecting str(qs.query) never hits the database.
+
+        SQLite cannot execute <@ / nlevel() — if this test passes at all
+        (no OperationalError), the QuerySet was correctly left unevaluated.
+        """
+        with _pg_vendor_patch():
+            qs = SimpleNode.objects.cousins_of(tree["D"], degree=2)
+            str(qs.query)  # must not raise
