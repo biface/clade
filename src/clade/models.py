@@ -1,10 +1,11 @@
 # =============================================================================
 # clade/models.py — CladeNode abstract base class.
 #
-# Refs: DD-001 (#1), DD-012 (#39), DD-013 (#40), DD-015
+# Refs: DD-001 (#1), DD-012 (#39), DD-013 (#40), DD-015, DD-016 (#56)
 #   #42  model structure
 #   #45  NodeManager wiring
 #   #46  instance convenience methods
+#   #60  extended kinship instance methods
 # =============================================================================
 
 from __future__ import annotations
@@ -47,17 +48,23 @@ class CladeNode(models.Model):
         Department.objects.descendants_of(node)
         Department.objects.siblings_of(node)
         Department.objects.root_of(node)
+        Department.objects.piblings_of(node)
+        Department.objects.niblings_of(node)
+        Department.objects.cousins_of(node, degree=2)
 
     Instance methods
     ----------------
     Convenience wrappers that delegate to the manager::
 
-        node.ancestors()    → QuerySet
-        node.descendants()  → QuerySet
-        node.siblings()     → QuerySet
-        node.root           → single instance (property)
-        node.is_root        → bool (property)
-        node.is_leaf        → bool (property)
+        node.ancestors()       → QuerySet
+        node.descendants()     → QuerySet
+        node.siblings()        → QuerySet
+        node.root              → single instance (property)
+        node.is_root           → bool (property)
+        node.is_leaf           → bool (property)
+        node.piblings()        → QuerySet
+        node.niblings()        → QuerySet
+        node.cousins(degree=2) → QuerySet
 
     Ordering
     --------
@@ -132,3 +139,39 @@ class CladeNode(models.Model):
     def is_leaf(self) -> bool:
         """``True`` if this node has no descendants."""
         return not type(self).objects.descendants_of(self).exists()
+
+    # ── Extended kinship (DD-016, #56, #60) ───────────────────────────────────
+
+    def piblings(self):
+        """Return siblings of this node's parent as a QuerySet.
+
+        Gender-neutral for aunt/uncle. Fixed degree only in v0.4.0 (see
+        DD-016). Delegates to ``type(self).objects.piblings_of(self)``.
+
+        Returns an empty QuerySet if this node is a root (no parent).
+        """
+        return type(self).objects.piblings_of(self)
+
+    def niblings(self):
+        """Return children of this node's siblings as a QuerySet.
+
+        Gender-neutral for nephew/niece. Fixed degree only in v0.4.0
+        (see DD-016). Delegates to
+        ``type(self).objects.niblings_of(self)``.
+
+        Returns an empty QuerySet if this node has no siblings, or if
+        none of its siblings have children.
+        """
+        return type(self).objects.niblings_of(self)
+
+    def cousins(self, degree: int = 2):
+        """Return nodes sharing a common ancestor *degree* levels above
+        this node, at the same depth (**symmetric degree** — see DD-016).
+
+        ``degree=2`` corresponds to genealogical "1st cousin". Delegates
+        to ``type(self).objects.cousins_of(self, degree=degree)``.
+
+        Returns an empty QuerySet if this node has no ancestor *degree*
+        levels up.
+        """
+        return type(self).objects.cousins_of(self, degree=degree)
