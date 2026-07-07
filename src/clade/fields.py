@@ -12,13 +12,21 @@
 #                     These lookups are used exclusively by NodeQuerySet
 #                     on PostgreSQL. They are never called on other backends.
 #
+# NLevel              PostgreSQL-native ltree nlevel(path) expression —
+#                     returns the number of labels (depth) in a path.
+#                     Used exclusively by NodeQuerySet.cousins_of() on
+#                     PostgreSQL, to filter candidates at an exact depth.
+#                     Internal use only — not re-exported from
+#                     clade/__init__.py (same treatment as AncestorOf /
+#                     DescendantOf).
+#
 # ConditionalAlterField
 #                     Migration operation that executes an AlterField only
 #                     on backends that support the target field type.
 #                     Used whenever a LtreeField is involved in a migration,
 #                     so that SQLite and other backends are unaffected.
 #
-# Refs: DD-003 (#3), DD-013 (#40), DD-015
+# Refs: DD-003 (#3), DD-013 (#40), DD-015 (#51), DD-016 (#56)
 # =============================================================================
 
 from __future__ import annotations
@@ -134,6 +142,44 @@ class AncestorOf(Lookup):
 
 LtreeField.register_lookup(DescendantOf)
 LtreeField.register_lookup(AncestorOf)
+
+
+# =============================================================================
+# NLevel — PostgreSQL-native ltree depth expression, used exclusively by
+# NodeQuerySet.cousins_of() to filter candidates at an exact depth.
+#
+# nlevel(path) returns the number of labels in an ltree value, e.g.
+# nlevel('1.2.4.6') == 4. There is no fallback branch here: on non-ltree
+# backends, NodeQuerySet computes depth via Length()/Replace() dot-counting
+# directly in managers.py — no field-level code is required for that path.
+#
+# Refs: DD-016 (#56)
+# =============================================================================
+
+
+class NLevel(models.Func):
+    """PostgreSQL ltree ``nlevel(path)`` — number of labels in the path.
+
+    Used exclusively by ``NodeQuerySet.cousins_of()`` on PostgreSQL to
+    filter candidates at an exact depth relative to a common ancestor.
+
+    Never call this directly outside ``NodeQuerySet`` — it assumes the
+    wrapped expression resolves to a column typed ``ltree`` on the current
+    backend. On non-PostgreSQL backends, depth filtering is handled
+    separately via ``Length``/``Replace`` dot-counting in ``managers.py``.
+    """
+
+    function = "nlevel"
+
+    def __init__(self, *expressions, **extra):
+        # output_field is set via Func's own constructor parameter rather
+        # than as a class attribute: Expression.output_field is a
+        # cached_property in django-stubs, and a plain-attribute override
+        # is rejected by basedpyright (reportAssignmentType) even though
+        # it is valid at runtime and is how Django's own Length/Concat
+        # do it. Passing it through **extra avoids the conflict entirely.
+        extra.setdefault("output_field", models.IntegerField())
+        super().__init__(*expressions, **extra)
 
 
 class ConditionalAlterField(migrations.AlterField):
