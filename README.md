@@ -12,12 +12,12 @@
 
 ## Status
 
-**Pre-alpha** — `v0.3.0` published. API not yet stable.
+**Pre-alpha** — `v0.4.0` published. API not yet stable.
 
 | Version | Status | Content |
 |---|---|---|
-| `v0.3.0` | ✅ Current | `LtreeField`, PostgreSQL ltree backend, backend dispatch, integration tests |
-| `v0.4.0` | 🔄 Next | Extended kinship (pibling, nibling, cousin) |
+| `v0.4.0` | ✅ Current | Extended kinship (pibling, nibling, cousin — symmetric degree) |
+| `v0.5.0` | 🔄 Next | Affinity model & storage decision (DD-005) |
 
 See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and
 [open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the
@@ -96,7 +96,29 @@ class Department(CladeNode):
         on_delete=ADOPT,          # re-parents children on delete
         related_name="children",
     )
+
+# Extended kinship (v0.4.0) — pibling, nibling, cousin
+grandparent = Category.objects.create(name="Grandparent")
+parent      = Category.objects.create(name="Parent", parent=grandparent)
+aunt        = Category.objects.create(name="Aunt",   parent=grandparent)
+me          = Category.objects.create(name="Me",     parent=parent)
+cousin      = Category.objects.create(name="Cousin", parent=aunt)
+
+me.piblings()                 # QuerySet → [aunt]      (siblings of my parent)
+aunt.niblings()               # QuerySet → [me]        (children of my siblings)
+me.cousins()                  # QuerySet → [cousin]    (degree=2, the default)
+
+# Manager API
+Category.objects.piblings_of(me)
+Category.objects.cousins_of(me, degree=2)
 ```
+
+`cousins()`/`cousins_of()` use a **symmetric** degree, not the genealogical
+`(degree, removed)` convention: `degree=2` (the default) matches "1st cousin";
+`degree=3` matches "2nd cousin". Candidates at a different depth than the
+node itself (genealogically "once removed", etc.) are not covered — see
+[issue #56](https://gitlab.com/open-works/clade/-/issues/56) for the full
+rationale and the planned post-v1.0.0 extension.
 
 ---
 
