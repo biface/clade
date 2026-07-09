@@ -29,15 +29,17 @@
 # This allows CladeNode subclasses to rename the field without breaking
 # clade. Exactly one LtreeField per model is enforced at runtime.
 #
-# Refs: DD-003 (#3), DD-013 (#40), DD-015, #45
+# Refs: DD-003 (#3), DD-013 (#40), DD-015, DD-016 (#56), #45
 # =============================================================================
 
 from __future__ import annotations
 
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, models
+from django.db.models import Value
+from django.db.models.functions import Length, Replace
 
-from clade.fields import LtreeField
+from clade.fields import LtreeField, NLevel
 
 
 class NodeQuerySet(models.QuerySet):
@@ -148,6 +150,97 @@ class NodeQuerySet(models.QuerySet):
         root_path = node_path.split(".")[0]
         return self.filter(**{field_name: root_path})
 
+    # ── Extended kinship (DD-016, #56) ────────────────────────────────────────
+
+    def piblings_of(self, node):
+        """Return siblings of *node*'s parent (gender-neutral aunt/uncle).
+
+        Fixed degree only in v0.4.0 — no "grand-pibling" (see DD-016).
+        Delegates entirely to ``siblings_of()``; introduces no new SQL.
+
+        Returns an empty QuerySet if *node* is a root (no parent).
+        """
+        if node.parent_id is None:
+            return self.none()
+        return self.siblings_of(node.parent)
+
+    def niblings_of(self, node):
+        """Return children of *node*'s siblings (gender-neutral nephew/niece).
+
+        Fixed degree only in v0.4.0 (see DD-016). Implemented as
+        ``filter(parent__in=siblings_of(node))`` — introduces no new SQL
+        beyond the existing ``siblings_of()`` primitive.
+
+        Returns an empty QuerySet if *node* has no siblings, or if none
+        of *node*'s siblings have children.
+        """
+        return self.filter(parent__in=self.siblings_of(node))
+
+    def cousins_of(self, node, degree: int = 2):
+        """Return nodes sharing a common ancestor exactly *degree* levels
+        above *node*, at the same depth as *node* (**symmetric degree**,
+        not genealogical ``degree``/``removed`` — see DD-016).
+
+        ``degree=2`` corresponds to genealogical "1st cousin"; ``degree=3``
+        to "2nd cousin". ``degree=1`` is degenerate and returns the same
+        set as ``siblings_of()``.
+
+        This definition is symmetric: it does **not** cover genealogical
+        "removed" cousins (candidates at a different depth than *node*
+        that share a common ancestor at an equivalent distance). That
+        parameter is deferred to post-v1.0.0 (see DD-016).
+
+        Returns an empty QuerySet if *node* has no ancestor *degree*
+        levels up (i.e. *node* is too close to the root).
+
+        Raises
+        ------
+        ValueError
+            If *degree* is less than 1.
+        """
+        if degree < 1:
+            raise ValueError(f"degree must be >= 1, got {degree!r}")
+
+        field = self._path_field()
+        field_name: str = field.name  # type: ignore[assignment]
+        node_path = getattr(node, field_name)
+        if not node_path:
+            return self.none()
+
+        parts = node_path.split(".")
+        if len(parts) <= degree:
+            return self.none()
+
+        ancestor_path = ".".join(parts[: len(parts) - degree])
+        closer_ancestor_path = (
+            node_path if degree == 1 else ".".join(parts[: len(parts) - (degree - 1)])
+        )
+
+        if connection.vendor == "postgresql":
+            # descendant_of (<@) is inclusive (DD-015 / #55 bugfix): excluding
+            # descendants of closer_ancestor_path also removes closer_ancestor_path
+            # itself and node's own branch — no separate self-exclusion needed.
+            return (
+                self.filter(**{f"{field_name}__descendant_of": ancestor_path})
+                .exclude(**{f"{field_name}__descendant_of": closer_ancestor_path})
+                .annotate(_nlevel=NLevel(field_name))
+                .filter(_nlevel=len(parts))
+            )
+
+        # Fallback: __startswith is exclusive of the prefix itself, so the
+        # degree == 1 case (closer_ancestor_path == node_path) needs an
+        # explicit equality exclusion to remove node itself.
+        return (
+            self.filter(**{f"{field_name}__startswith": ancestor_path + "."})
+            .exclude(**{f"{field_name}__startswith": closer_ancestor_path + "."})
+            .exclude(**{field_name: closer_ancestor_path})
+            .annotate(
+                _dots=Length(field_name)
+                - Length(Replace(field_name, Value("."), Value(""))),
+            )
+            .filter(_dots=len(parts) - 1)
+        )
+
 
 class NodeManager(models.Manager):
     """Manager that surfaces NodeQuerySet methods at the class level."""
@@ -168,3 +261,12 @@ class NodeManager(models.Manager):
 
     def root_of(self, node):
         return self.get_queryset().root_of(node)
+
+    def piblings_of(self, node):
+        return self.get_queryset().piblings_of(node)
+
+    def niblings_of(self, node):
+        return self.get_queryset().niblings_of(node)
+
+    def cousins_of(self, node, degree: int = 2):
+        return self.get_queryset().cousins_of(node, degree=degree)
