@@ -13,12 +13,12 @@
 
 ## Statut
 
-**Pré-alpha** — `v0.3.0` publié. L'API n'est pas encore stable.
+**Pré-alpha** — `v0.4.0` publié. L'API n'est pas encore stable.
 
 | Version | Statut | Contenu |
 |---|---|---|
-| `v0.3.0` | ✅ Actuelle | `LtreeField`, backend PostgreSQL ltree, dispatch par backend, tests d'intégration |
-| `v0.4.0` | 🔄 Suivante | Parenté étendue (pibling, nibling, cousin) |
+| `v0.4.0` | ✅ Actuelle | Parenté étendue (pibling, nibling, cousin — degré symétrique) |
+| `v0.5.0` | 🔄 Suivante | Modèle Affinité & décision de stockage (DD-005) |
 
 Voir les [jalons](https://gitlab.com/open-works/clade/-/milestones) et les
 [issues](https://gitlab.com/open-works/clade/-/issues) sur GitLab pour la
@@ -99,7 +99,30 @@ class Departement(CladeNode):
         on_delete=ADOPT,          # re-parentifie les enfants à la suppression
         related_name="children",
     )
+
+# Parenté étendue (v0.4.0) — pibling, nibling, cousin
+grandparent = Categorie.objects.create(nom="Grand-parent")
+parent      = Categorie.objects.create(nom="Parent", parent=grandparent)
+tante       = Categorie.objects.create(nom="Tante",  parent=grandparent)
+moi         = Categorie.objects.create(nom="Moi",    parent=parent)
+cousin      = Categorie.objects.create(nom="Cousin", parent=tante)
+
+moi.piblings()                # QuerySet → [tante]     (fratrie de mon parent)
+tante.niblings()               # QuerySet → [moi]       (enfants de sa fratrie)
+moi.cousins()                  # QuerySet → [cousin]    (degree=2 par défaut)
+
+# API Manager
+Categorie.objects.piblings_of(moi)
+Categorie.objects.cousins_of(moi, degree=2)
 ```
+
+`cousins()`/`cousins_of()` utilisent un degré **symétrique**, et non la
+convention généalogique `(degree, removed)` : `degree=2` (valeur par défaut)
+correspond au "cousin germain" ; `degree=3` au "cousin issu de germain". Les
+candidats à une profondeur différente du nœud lui-même (relation dite
+"removed" en généalogie) ne sont pas couverts — voir
+[l'issue #56](https://gitlab.com/open-works/clade/-/issues/56) pour la
+justification complète et l'extension prévue post-v1.0.0.
 
 ---
 

@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] — 2026-07-07
+
+### Added
+- `NLevel` — internal `Func` expression wrapping the PostgreSQL `nlevel(path)`
+  function; used by `cousins_of()` for exact-depth filtering (DD-016)
+- `NodeQuerySet.piblings_of()` / `node.piblings()` — siblings of a node's
+  parent; pure composition of `siblings_of()`, no new SQL (DD-016)
+- `NodeQuerySet.niblings_of()` / `node.niblings()` — children of a node's
+  siblings; pure composition of `siblings_of()`, no new SQL (DD-016)
+- `NodeQuerySet.cousins_of(node, degree=2)` / `node.cousins(degree=2)` —
+  symmetric-degree cousin queries (DD-016); PostgreSQL dispatch via the
+  `descendant_of` ltree lookup and `NLevel`, fallback via `__startswith` and
+  `Length`/`Replace` dot-counting
+- `NodeManager` proxies for the three new methods
+- `kinship_tree` / `pg_kinship_tree` fixtures — additive extended-tree
+  fixtures dedicated to the three new relationships (kept separate from
+  `tree` / `pg_tree` to avoid breaking existing leaf-node assertions)
+- 18 SQLite unit tests, 5 PostgreSQL dispatch tests, and 14 PostgreSQL
+  integration parity tests for extended kinship
+- `README.md` / `README.fr.md` usage examples for `piblings()`, `niblings()`,
+  `cousins()`
+
+---
+
 ## [0.3.0] — 2026-06-13
 
 ### Added
@@ -93,7 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.3.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.4.0...HEAD
+[0.4.0]: https://gitlab.com/open-works/clade/-/releases/v0.4.0
 [0.3.0]: https://gitlab.com/open-works/clade/-/releases/v0.3.0
 [0.2.0]: https://gitlab.com/open-works/clade/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/open-works/clade/-/releases/v0.1.0
