@@ -301,7 +301,7 @@ cover:py312:
     - tox -e coverage
   after_script:
     - pip install --quiet codecov-cli
-    - codecovcli upload-process --git-service gitlab --flag py312
+    - codecovcli upload-process --git-service gitlab --flag unittests
         --coverage-files-search-root-folder coverage/ || true
   artifacts:
     name: "coverage-$CI_COMMIT_SHORT_SHA"

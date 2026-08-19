@@ -25,8 +25,18 @@ coverage:
         threshold: 1%
 
 # -----------------------------------------------------------------------------
-# Components — coverage by conceptual area (DD-001 to DD-004)
-# Paths will be populated as the module grows.
+# Components — coverage by conceptual area (DD-001 to DD-005)
+#
+# Paths reflect the real flat src/clade/ layout (no subpackages) — this
+# repo has always been flat; the original component paths below assumed
+# a subpackage structure that never existed and never accrued coverage.
+#
+# Known overlap (documented, not hidden): since #70, models.py and
+# managers.py each contain a small amount of Affinity-related code
+# (CladeNode.affinities()/affinities_grouped(), NodeManager's proxies)
+# alongside their dominant Node Tree / Kinship content. Component paths
+# operate at file granularity — this cannot be split further without
+# restructuring the module into subpackages, which is out of scope here.
 # -----------------------------------------------------------------------------
 component_management:
   default_rules:
@@ -38,29 +48,42 @@ component_management:
   individual_components:
 
     - component_id: node_tree
-      name: "Node Tree"          # DD-001 — core tree model
+      name: "Node Tree"          # DD-001, DD-012–DD-015 — CladeNode, path, deletion
       paths:
-        - "src/clade/models/**"
-        - "src/clade/tree/**"
+        - "src/clade/models.py"
+        - "src/clade/deletion.py"
+        - "src/clade/signals.py"
 
     - component_id: kinship
-      name: "Kinship queries"    # DD-002 — parent, sibling, pibling, nibling…
+      name: "Kinship queries"    # DD-002, DD-016 — ancestors, siblings, pibling, cousin…
       paths:
-        - "src/clade/kinship/**"
-        - "src/clade/relations/**"
+        - "src/clade/managers.py"
 
     - component_id: backends
-      name: "Backends"           # DD-003 — ltree + fallback
+      name: "Backends"           # DD-003, DD-015 — ltree + fallback dispatch
       paths:
-        - "src/clade/backends/**"
+        - "src/clade/fields.py"
 
     - component_id: affinity
-      name: "Affinity"           # DD-004 — lateral shared-attribute grouping
+      name: "Affinity"           # DD-004, DD-005 — lateral shared-attribute grouping
       paths:
-        - "src/clade/affinity/**"
+        - "src/clade/affinity.py"
+        - "src/clade/checks.py"
+
+    - component_id: wiring
+      name: "Wiring"             # AppConfig signal/check registration, shared discovery
+      paths:
+        - "src/clade/apps.py"
+        - "src/clade/_discovery.py"
 
 # -----------------------------------------------------------------------------
 # Flags — by test type
+#
+# "unittests" names the *kind* of test (standard SQLite suite), not the
+# interpreter that ran it — stays valid if the coverage matrix later grows
+# (e.g. a distinct flag for #74's PostgreSQL integration tests). The CI
+# job previously uploaded under --flag py312, which never matched this
+# declaration — fixed in .gitlab-ci.yml (cover:py312 job) alongside this.
 # -----------------------------------------------------------------------------
 flags:
   unittests:
