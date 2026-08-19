@@ -36,7 +36,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -44,7 +44,7 @@ from django.db import models
 from django.db.models import Q
 
 if TYPE_CHECKING:
-    from django.db.models import Model
+    from django.db.models import Model, QuerySet
 
 
 class AffinityRule:
@@ -399,3 +399,159 @@ def on_affinity_delete(sender, instance, **kwargs) -> None:
         Q(content_type_a=ct, object_id_a=instance.pk)
         | Q(content_type_b=ct, object_id_b=instance.pk)
     ).delete()
+
+
+# =============================================================================
+# Read side — affinities_of() / affinities_of_grouped() (#70).
+#
+# Affinity is inter-model by design (DD-005), so "the partner nodes" of a
+# given node cannot in general be a single homogeneous QuerySet: a target
+# model may be named by more than one source model under the same channel
+# (channel uniqueness is per declaring model, not global — see
+# TestAffinityChannelCollision in tests/test_affinity.py). Two entry
+# points, not one flag-controlled function, so the return type never
+# depends on the data found at runtime:
+#
+#   affinities_of(node, channel=None)          -> QuerySet[Model]
+#       Single-model QuerySet. Raises HeterogeneousAffinityError if the
+#       result would span more than one partner model.
+#
+#   affinities_of_grouped(node, channel=None)  -> dict[type[Model], QuerySet]
+#       Never raises. One key per distinct partner model found.
+#
+# CladeNode.affinities()/affinities_grouped() and
+# NodeManager.affinities_of()/affinities_of_grouped() are thin proxies
+# onto these two functions (see clade/models.py, clade/managers.py).
+# =============================================================================
+
+
+class HeterogeneousAffinityError(Exception):
+    """Raised by ``affinities_of()`` when partners span more than one model.
+
+    Use ``affinities_of_grouped()`` instead when that is expected — e.g.
+    two different source models reusing the same channel name toward the
+    same target instance (DD-005: channel uniqueness is per declaring
+    model, not global).
+    """
+
+
+def _affinity_rows_for(node: Model, channel: str | None = None) -> QuerySet[Affinity]:
+    """Return the ``Affinity`` rows referencing *node*, on either side.
+
+    Internal — callers use ``affinities_of()``/``affinities_of_grouped()``.
+    """
+    ct_self = ContentType.objects.get_for_model(type(node))
+    qs = Affinity.objects.filter(
+        Q(content_type_a=ct_self, object_id_a=node.pk)
+        | Q(content_type_b=ct_self, object_id_b=node.pk)
+    )
+    if channel is not None:
+        qs = qs.filter(channel=channel)
+    return qs
+
+
+def _default_manager(model: type[Model]):
+    """Return *model*'s default manager — centralises the single
+    ``# type: ignore`` needed since ``_default_manager`` is injected by
+    Django's metaclass and invisible to a generic ``type[Model]``."""
+    return model._default_manager  # type: ignore[reportAttributeAccessIssue]
+
+
+def _model_label(model: type[Model]) -> str:
+    """Return *model*'s ``app_label.ModelName`` label — same rationale
+    as ``_default_manager`` above for the single ``# type: ignore``."""
+    meta = model._meta  # type: ignore[reportAttributeAccessIssue]
+    return meta.label
+
+
+def _other_side(row: Affinity, ct_self: ContentType, self_pk) -> tuple[int, int]:
+    """Return ``(content_type_id, object_id)`` for the side of *row*
+    that is *not* ``(ct_self, self_pk)``. Same ``_id`` shadow-attribute
+    rationale as the ``content_type_a_id`` comment further up this file.
+    """
+    ct_a_id = row.content_type_a_id  # type: ignore[reportAttributeAccessIssue]
+    ct_b_id = row.content_type_b_id  # type: ignore[reportAttributeAccessIssue]
+    if ct_a_id == ct_self.pk and row.object_id_a == self_pk:
+        return ct_b_id, cast(int, row.object_id_b)
+    return ct_a_id, cast(int, row.object_id_a)
+
+
+def _rule_target_model_for_channel(node: Model, channel: str) -> type[Model] | None:
+    """Resolve the declared target model for *node*'s own rule on
+    *channel*, if *node*'s model declares one. Used only as a fallback
+    to type an otherwise-empty result — see ``affinities_of()``.
+    """
+    meta = type(node)._meta  # type: ignore[reportAttributeAccessIssue]
+    rules = getattr(meta, "affinity_rules", None)
+    if not rules:
+        return None
+    for rule in rules:
+        if rule.channel == channel:
+            return rule.get_target_model()
+    return None
+
+
+def affinities_of_grouped(
+    node: Model, channel: str | None = None
+) -> dict[type[Model], QuerySet[Model]]:
+    """Return ``{partner_model: QuerySet}`` for every partner of *node*.
+
+    Never raises — the dict has one key per distinct model found on the
+    "other side" of a matching ``Affinity`` row. In the common case
+    (single declaring source, or a ``channel`` narrowing to one rule),
+    the dict has exactly one key. Empty dict if *node* has no Affinity
+    rows (optionally, for *channel*).
+    """
+    ct_self = ContentType.objects.get_for_model(type(node))
+    rows = _affinity_rows_for(node, channel=channel)
+
+    partner_ids: dict[int, set[int]] = {}
+    for row in rows:
+        other_ct_id, other_id = _other_side(row, ct_self, node.pk)
+        partner_ids.setdefault(other_ct_id, set()).add(other_id)
+
+    result: dict[type[Model], QuerySet[Model]] = {}
+    for ct_id, ids in partner_ids.items():
+        partner_model = ContentType.objects.get_for_id(ct_id).model_class()
+        if partner_model is None:
+            continue  # Stale ContentType (model removed) — skip defensively.
+        result[partner_model] = _default_manager(partner_model).filter(pk__in=ids)
+    return result
+
+
+def affinities_of(node: Model, channel: str | None = None) -> QuerySet[Model]:
+    """Return a single ``QuerySet`` of *node*'s Affinity partners.
+
+    Raises ``HeterogeneousAffinityError`` if the matching rows reference
+    more than one distinct partner model — use
+    ``affinities_of_grouped()`` in that case instead.
+
+    When no matching row exists, the result is an empty QuerySet. Its
+    model is inferred from *node*'s own declared rule for *channel* when
+    possible (giving a correctly-typed empty QuerySet); if that cannot
+    be determined (no ``channel``, or *node* declares no matching rule —
+    e.g. *node* is a passive target with no Affinity rows yet), an empty
+    ``Affinity`` QuerySet is returned as a documented fallback. This is
+    behaviourally indistinguishable from any other empty QuerySet for
+    iteration, ``.exists()``, ``.count()``, etc. — only ``.model``
+    reports ``Affinity`` rather than the (undeterminable) partner type.
+    """
+    grouped = affinities_of_grouped(node, channel=channel)
+
+    if len(grouped) > 1:
+        labels = ", ".join(_model_label(m) for m in grouped)
+        where = f" on channel {channel!r}" if channel else ""
+        raise HeterogeneousAffinityError(
+            f"affinities_of({node!r}{where}) spans more than one partner "
+            f"model ({labels}) — use affinities_of_grouped() instead."
+        )
+
+    if grouped:
+        return next(iter(grouped.values()))
+
+    if channel is not None:
+        target_model = _rule_target_model_for_channel(node, channel)
+        if target_model is not None:
+            return _default_manager(target_model).none()
+
+    return Affinity.objects.none()  # type: ignore[return-value]
