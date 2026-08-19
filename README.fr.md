@@ -35,8 +35,8 @@ descendants, fratrie et lignes collatérales (piblings, niblings, cousins…) �
 une terminologie non genrée tout au long.
 
 Il introduit également le concept d'**Affinité** : une relation latérale entre des
-nœuds partageant des valeurs d'attributs sans lien hiérarchique direct
-*(prévu pour v0.5.0)*.
+nœuds partageant des valeurs d'attributs sans lien hiérarchique direct — inter-modèles
+par conception, déclarée via `Meta.affinity_rules` *(v0.5.0)*.
 
 Le module cible plusieurs moteurs de base de données :
 - **PostgreSQL** avec `ltree` — optimisation native *(v0.3.0)*
@@ -123,6 +123,84 @@ candidats à une profondeur différente du nœud lui-même (relation dite
 "removed" en généalogie) ne sont pas couverts — voir
 [l'issue #56](https://gitlab.com/open-works/clade/-/issues/56) pour la
 justification complète et l'extension prévue post-v1.0.0.
+
+---
+
+## Affinité (v0.5.0)
+
+L'**Affinité** modélise une relation *non hiérarchique* : deux nœuds qui
+partagent une valeur d'attribut, sans lien parent/enfant entre eux. Elle est
+inter-modèles par conception — un `Department` et un `Project` peuvent être
+en Affinité même s'ils sont des modèles concrets sans rapport entre eux, du
+moment que les deux héritent de `CladeNode`.
+
+```python
+from django.db import models
+from clade.affinity import AffinityRule
+from clade.models import CladeNode
+
+
+class Department(CladeNode):
+    name    = models.CharField(max_length=255)
+    region  = models.CharField(max_length=255, null=True, blank=True)
+    manager = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta(CladeNode.Meta):
+        affinity_rules = [
+            AffinityRule("region",  to="myapp.Project", target_field="cost_center", channel="geo"),
+            AffinityRule("manager", to="myapp.Project", target_field="lead",         channel="management"),
+        ]
+
+
+class Project(CladeNode):
+    title       = models.CharField(max_length=255)
+    cost_center = models.CharField(max_length=255, null=True, blank=True)
+    lead        = models.CharField(max_length=255, null=True, blank=True)
+
+
+# Les lignes d'Affinité sont matérialisées automatiquement à la sauvegarde —
+# aucune synchronisation manuelle nécessaire.
+paris_dept = Department.objects.create(name="Bureau de Paris", region="paris", manager="alice")
+paris_proj = Project.objects.create(title="Extension du métro", cost_center="paris", lead="alice")
+
+paris_dept.affinities(channel="geo")         # QuerySet[Project] → [paris_proj]
+paris_dept.affinities(channel="management")  # QuerySet[Project] → [paris_proj]
+
+# Fonctionne dans les deux sens — un modèle cible passif (Project ici) ne
+# déclare jamais lui-même affinity_rules, mais se resynchronise quand même
+# à sa propre sauvegarde.
+paris_proj.affinities(channel="geo")         # QuerySet[Department] → [paris_dept]
+```
+
+`affinities(channel=None)` retourne un unique `QuerySet` et lève
+`HeterogeneousAffinityError` si le résultat s'étendait sur plusieurs modèles
+partenaires — ce cas peut survenir quand deux modèles sources *différents*
+réutilisent le même nom de canal vers la même cible (l'unicité de `channel`
+est par modèle déclarant, pas globale). Utilisez `affinities_grouped()` dans
+ce cas : elle ne lève jamais d'exception et retourne `{modèle: QuerySet}` à
+la place d'un `QuerySet` unique.
+
+```python
+paris_dept.affinities_grouped(channel="geo")
+# {Project: <QuerySet [paris_proj]>}
+```
+
+**Contraintes :**
+- `local_field`/`target_field` doivent appartenir à une liste blanche fixe
+  de types de champs scalaires (`CharField`, `IntegerField`, `DateField`,
+  `BooleanField`, et similaires) — vérifié à `manage.py check` / au
+  démarrage de la CI (`clade.E002`). `ManyToManyField`, `FileField`,
+  `JSONField`, `FloatField`, et `ForeignKey`/`OneToOneField` sont rejetés.
+- `channel` doit être unique au sein de la liste `affinity_rules` d'un même
+  modèle (`clade.E001`) — mais librement réutilisable entre modèles sources
+  différents.
+- La fermeture transitive multi-sauts (A~B et B~C ⟹ A~C via un nœud
+  intermédiaire que ni A ni B ne désigne par une règle) n'est **pas**
+  calculée en v0.5.0 — reportée à v0.6.0. Seules les relations directes
+  explicitement nommées par une `AffinityRule` sont matérialisées.
+
+Voir [l'issue #5](https://gitlab.com/open-works/clade/-/issues/5) (DD-005)
+pour la justification complète.
 
 ---
 
