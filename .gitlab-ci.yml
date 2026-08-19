@@ -14,11 +14,13 @@
 #               main branch, MR→main, version tags
 #   build       Version consistency check + package build
 #               version tags only, after check + test + integrate + cover
-#   publish     TestPyPI (rc tags) / PyPI (final tags)
+#   publish     TestPyPI (rc tags) / PyPI (final tags) / GitLab Release (final tags)
 #               after build
 #
-# Release creation (DD-010 Stage 1): manual via GitLab UI.
-# Automated release-cli job deferred to Stage 2 (v0.5.0).
+# Release creation (DD-010 Stage 2, activated v0.5.0): automated via
+# publish:release (release-cli), reading CHANGELOG.md and running after
+# publish:pypi succeeds. Manual creation via the GitLab UI (Stage 1) is no
+# longer required for final tags.
 #
 # Django version matrix
 # ─────────────────────
@@ -444,26 +446,33 @@ publish:pypi:
     name: pypi
     url: https://pypi.org/project/django-clade/
 
-# ─── DD-010 Stage 2 placeholder (v0.5.0) ──────────────────────────────────────
-# At v0.5.0, add a `release` job using release-cli that reads the CHANGELOG.md
-# section matching the tag and creates the GitLab release automatically.
-# Until then, create the release manually via the GitLab UI after publish:pypi.
+# ─── DD-010 Stage 2: automated GitLab Release (v0.5.0) ────────────────────────
+# Creates the GitLab Release automatically from CHANGELOG.md after publish:pypi
+# succeeds. Manual creation via the GitLab UI (Stage 1) is no longer needed
+# for final tags.
 #
-# publish:release:
-#   extends: .rules_final_tag
-#   stage: publish
-#   image: registry.gitlab.com/gitlab-org/release-cli:latest
-#   needs: [publish:pypi]
-#   script:
-#     - |
-#       VERSION="${CI_COMMIT_TAG#v}"
-#       awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{if(flag) exit} flag" \
-#         CHANGELOG.md > release_notes.md
-#   release:
-#     tag_name: $CI_COMMIT_TAG
-#     name: "django-clade $CI_COMMIT_TAG"
-#     description: "./release_notes.md"
-#     assets:
-#       links:
-#         - name: "PyPI"
-#           url: "https://pypi.org/project/django-clade/$CI_COMMIT_TAG/"
+# CHANGELOG.md section extraction (Keep a Changelog format, DD-006/DD-010):
+#   "## [X.Y.Z] — YYYY-MM-DD" starts the section; the next "## [" header or a
+#   standalone "---" divider ends it. Verified against every existing section
+#   (0.0.5 → 0.4.0) before activation — no trailing separator leaks into the
+#   Release description.
+
+publish:release:
+  extends: .rules_final_tag
+  stage: publish
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs: [publish:pypi]
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{if(flag) exit} /^---\$/{if(flag) exit} flag" \
+        CHANGELOG.md > release_notes.md
+      echo "--- release_notes.md ---" && cat release_notes.md
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "django-clade $CI_COMMIT_TAG"
+    description: "./release_notes.md"
+    assets:
+      links:
+        - name: "PyPI"
+          url: "https://pypi.org/project/django-clade/$CI_COMMIT_TAG/"
