@@ -1,21 +1,41 @@
 # =============================================================================
-# docs/conf.py — Sphinx configuration.
+# docs/source/conf.py — Sphinx configuration.
 #
-# Scaffold only (#79): project metadata, Furo theme, MyST-Parser. No
-# django.setup() / autodoc wiring here — that's #80, added once this base
-# builds cleanly (`tox -e docs`). sphinx.ext.autodoc and sphinx.ext.napoleon
-# are intentionally NOT in the extensions list yet; adding them without a
-# configured Django app registry would fail as soon as docs/reference/api.md
-# gains real autodoc directives (still a placeholder as of #79 — see #81).
+# #79: project metadata, Furo theme, MyST-Parser, logo (scaffold).
+# #80: Django app registry wired for autodoc. Reuses tests.settings — no
+# bespoke fourth settings module alongside tests.settings /
+# tests.settings_integration / tests.settings_integration_local (DD-017).
+# Repo root and src/ added to sys.path so `tests` and `clade` are importable
+# from docs/source/. Three levels up from this file: source -> docs -> repo
+# root (docs/source split introduced after #79's initial scaffold).
 #
 # Refs: DD-017 (#78), #79, #80
 # =============================================================================
+
+import os
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.settings")
+
+import django  # noqa: E402  (must follow sys.path/env setup above)
+
+django.setup()
 
 project = "Clade"
 copyright = "2026, open-works"
 author = "biface"
 
 extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
     "myst_parser",
 ]
 
@@ -29,3 +49,7 @@ html_logo = "_static/images/logo.svg"
 myst_enable_extensions = [
     "colon_fence",
 ]
+
+intersphinx_mapping = {
+    "django": ("https://docs.djangoproject.com/en/5.2/", None),
+}

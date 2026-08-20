@@ -1,12 +1,17 @@
 # .tox-config/requirements/docs.txt — Sphinx documentation build.
 #
-# Deliberately not layered on base.django.txt via -r: the scaffold (#79)
-# builds without a configured Django app registry. #80 adds Django/
-# autodoc-specific dependencies (django~=5.2, already a project dependency
-# via pyproject.toml install; no new package needed for autodoc itself,
-# it's part of Sphinx core) when django.setup() wiring lands in conf.py.
+# #80: django.setup() wired in conf.py — no new package added here, since
+# tox installs the project itself (core dep `django>=5.2`) into every env
+# by default, docs included. This file only lists what's NOT already a
+# project dependency: sphinx, furo, myst-parser.
 #
-# Refs: DD-017 (#78), #79
+# NOTE: this file is consumed by `tox -e docs` only. It is NOT exposed as
+# a pip extra (`pip install ".[docs]"`) — pyproject.toml has no `docs`
+# extras group. Deferred to #87 (.readthedocs.yaml): RTD will either
+# install directly from this file, or a `docs` extra will be added then.
+# Decision not yet made — see #87.
+#
+# Refs: DD-017 (#78), #79, #80
 
 sphinx
 furo
