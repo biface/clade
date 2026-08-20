@@ -1,0 +1,13 @@
+# .tox-config/requirements/docs.txt — Sphinx documentation build.
+#
+# Deliberately not layered on base.django.txt via -r: the scaffold (#79)
+# builds without a configured Django app registry. #80 adds Django/
+# autodoc-specific dependencies (django~=5.2, already a project dependency
+# via pyproject.toml install; no new package needed for autodoc itself,
+# it's part of Sphinx core) when django.setup() wiring lands in conf.py.
+#
+# Refs: DD-017 (#78), #79
+
+sphinx
+furo
+myst-parser
