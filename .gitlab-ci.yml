@@ -131,6 +131,17 @@ check:bandit:
   script:
     - tox -e bandit
 
+# check:docs (#86) — sphinx-build -W via tox -e docs, warnings as errors.
+# Verification gate only, no artifact: Read the Docs is the sole publish
+# target (DD-017); docs/_build/html is produced locally for proofreading
+# and is gitignored. This job answers one question — is the doc still
+# valid for an RTD publish — the same way RTD's own fail_on_warning: true
+# does, but pre-merge instead of post-merge.
+check:docs:
+  extends: .check_base
+  script:
+    - tox -e docs
+
 # ─── Stage: test ──────────────────────────────────────────────────────────────
 # Runs on every push and MR, after the check stage has passed.
 # Each job targets a specific Python interpreter; Django 5.2 LTS is implicit

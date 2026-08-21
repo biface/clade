@@ -432,7 +432,7 @@ commands    = [["pytest", "--migrations"]]
 description = "Build Sphinx documentation (docs/source -> docs/_build/html)"
 base_python = "python3.12"
 deps        = ["-r {toxinidir}/.tox-config/requirements/docs.txt"]
-commands    = [["sphinx-build", "-b", "html", "docs/source", "docs/_build/html"]]
+commands    = [["sphinx-build", "-b", "html", "docs/source", "docs/_build/html", "-W"]]
 
 # =============================================================================
 # Pre-push local workflow
