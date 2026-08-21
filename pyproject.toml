@@ -35,7 +35,7 @@ readme          = "README.md"
 license         = { file = "LICENSE.txt" }
 requires-python = ">=3.10"
 authors         = [
-    { name = "open-works", email = "" },
+    { name = "biface", email = "fek2qe8i3@mozmail.com" },
 ]
 keywords = [
     "django",
@@ -413,6 +413,26 @@ description = "Validate Django migrations — run with full migration machinery"
 base_python = "python3.12"
 deps        = ["-r {toxinidir}/.tox-config/requirements/base.django.txt"]
 commands    = [["pytest", "--migrations"]]
+
+# =============================================================================
+# Documentation build (Sphinx + Furo + MyST-Parser)
+# `-W` (warnings as errors) intentionally NOT set here -- that's #86's CI
+# job (docs:build), once content has stabilised enough to build warning-free.
+# Local iteration stays lenient so a missing toctree entry doesn't block
+# a work-in-progress build.
+#
+# Source/build split: docs/source/ holds conf.py and content, docs/_build/
+# is the generated output -- kept isolated so _build/ can be gitignored
+# without touching the source tree.
+#
+# Refs: DD-017 (#78), #79, #86
+# =============================================================================
+
+[tool.tox.env.docs]
+description = "Build Sphinx documentation (docs/source -> docs/_build/html)"
+base_python = "python3.12"
+deps        = ["-r {toxinidir}/.tox-config/requirements/docs.txt"]
+commands    = [["sphinx-build", "-b", "html", "docs/source", "docs/_build/html"]]
 
 # =============================================================================
 # Pre-push local workflow

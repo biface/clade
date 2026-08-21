@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="clade-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#475569;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Hexagonal badge (common element) -->
+  <polygon points="150,20 250,75 250,185 150,240 50,185 50,75"
+           fill="url(#clade-bg)"
+           stroke="#1e293b"
+           stroke-width="4"
+           filter="url(#shadow)"/>
+
+  <!-- Inner hexagon border -->
+  <polygon points="150,35 235,82.5 235,177.5 150,225 65,177.5 65,82.5"
+           fill="none"
+           stroke="#94a3b8"
+           stroke-width="2"
+           opacity="0.5"/>
+
+  <!-- Node tree with one lateral Affinity link -->
+  <g>
+    <!-- Hierarchy edges (solid) -->
+    <line x1="150" y1="88" x2="120" y2="118" stroke="#ffffff" stroke-width="3"/>
+    <line x1="150" y1="88" x2="180" y2="118" stroke="#ffffff" stroke-width="3"/>
+    <line x1="120" y1="118" x2="102" y2="148" stroke="#ffffff" stroke-width="3"/>
+    <line x1="120" y1="118" x2="138" y2="148" stroke="#ffffff" stroke-width="3"/>
+    <line x1="180" y1="118" x2="198" y2="148" stroke="#ffffff" stroke-width="3"/>
+
+    <!-- Affinity edge (dashed, lateral, non-hierarchical) -->
+    <line x1="138" y1="148" x2="198" y2="148" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="5,4"/>
+
+    <!-- Nodes -->
+    <circle cx="150" cy="88" r="10" fill="#ffffff"/>
+    <circle cx="120" cy="118" r="9" fill="#ffffff"/>
+    <circle cx="180" cy="118" r="9" fill="#ffffff"/>
+    <circle cx="102" cy="148" r="7.5" fill="#ffffff"/>
+    <circle cx="138" cy="148" r="7.5" fill="#ffffff"/>
+    <circle cx="198" cy="148" r="7.5" fill="#ffffff"/>
+  </g>
+
+  <!-- Project name -->
+  <text x="150" y="210"
+        font-family="'Courier New', monospace"
+        font-size="24"
+        font-weight="bold"
+        fill="#ffffff"
+        text-anchor="middle">clade</text>
+
+  <!-- Tools badge (common element) -->
+  <rect x="105" y="250" width="90" height="30" rx="15" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+  <text x="150" y="270"
+        font-family="Arial, sans-serif"
+        font-size="14"
+        font-weight="bold"
+        fill="#ffffff"
+        text-anchor="middle">django</text>
+</svg>

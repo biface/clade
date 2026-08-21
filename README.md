@@ -33,7 +33,8 @@ not only parent/child pairs, but ancestors, descendants, siblings, and collatera
 lines (piblings, niblings, cousins…) — using gender-neutral terminology throughout.
 
 It also introduces **Affinity**: a lateral relationship between nodes that share
-attribute values without any hierarchical link between them *(planned for v0.5.0)*.
+attribute values without any hierarchical link between them — inter-model by
+design, declared via `Meta.affinity_rules` *(v0.5.0)*.
 
 The module targets multiple database backends:
 - **PostgreSQL** with `ltree` — native optimisation *(v0.3.0)*
@@ -119,6 +120,79 @@ Category.objects.cousins_of(me, degree=2)
 node itself (genealogically "once removed", etc.) are not covered — see
 [issue #56](https://gitlab.com/open-works/clade/-/issues/56) for the full
 rationale and the planned post-v1.0.0 extension.
+
+---
+
+## Affinity (v0.5.0)
+
+**Affinity** models a *non-hierarchical* relationship: two nodes that share an
+attribute value, with no parent/child link between them. It's inter-model by
+design — a `Department` and a `Project` can be in Affinity even though they're
+unrelated concrete models, as long as both inherit `CladeNode`.
+
+```python
+from django.db import models
+from clade.affinity import AffinityRule
+from clade.models import CladeNode
+
+
+class Department(CladeNode):
+    name    = models.CharField(max_length=255)
+    region  = models.CharField(max_length=255, null=True, blank=True)
+    manager = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta(CladeNode.Meta):
+        affinity_rules = [
+            AffinityRule("region",  to="myapp.Project", target_field="cost_center", channel="geo"),
+            AffinityRule("manager", to="myapp.Project", target_field="lead",         channel="management"),
+        ]
+
+
+class Project(CladeNode):
+    title       = models.CharField(max_length=255)
+    cost_center = models.CharField(max_length=255, null=True, blank=True)
+    lead        = models.CharField(max_length=255, null=True, blank=True)
+
+
+# Affinity rows are materialised automatically on save — no manual sync.
+paris_dept = Department.objects.create(name="Paris office", region="paris", manager="alice")
+paris_proj = Project.objects.create(title="Metro extension", cost_center="paris", lead="alice")
+
+paris_dept.affinities(channel="geo")         # QuerySet[Project] → [paris_proj]
+paris_dept.affinities(channel="management")  # QuerySet[Project] → [paris_proj]
+
+# Works from either side — a passive target model (Project here) never
+# itself declares affinity_rules, but still resyncs on its own save.
+paris_proj.affinities(channel="geo")         # QuerySet[Department] → [paris_dept]
+```
+
+`affinities(channel=None)` returns a single `QuerySet` and raises
+`HeterogeneousAffinityError` if the result would span more than one partner
+model — this can happen when two *different* source models reuse the same
+channel name toward the same target (`channel` uniqueness is per declaring
+model, not global). Use `affinities_grouped()` for that case: it never
+raises, returning `{model: QuerySet}` instead of a single `QuerySet`.
+
+```python
+paris_dept.affinities_grouped(channel="geo")
+# {Project: <QuerySet [paris_proj]>}
+```
+
+**Constraints:**
+- `local_field`/`target_field` must be one of a fixed allowlist of scalar
+  field types (`CharField`, `IntegerField`, `DateField`, `BooleanField`,
+  and similar) — checked at `manage.py check` / CI startup (`clade.E002`).
+  `ManyToManyField`, `FileField`, `JSONField`, `FloatField`, and
+  `ForeignKey`/`OneToOneField` are rejected.
+- `channel` must be unique within a single model's `affinity_rules` list
+  (`clade.E001`) — but is freely reusable across different source models.
+- Multi-hop transitive closure (A~B and B~C ⟹ A~C through an intermediate
+  node neither A nor B declares a rule toward) is **not** computed in
+  v0.5.0 — deferred to v0.6.0. Only the direct relationships an
+  `AffinityRule` explicitly names are materialised.
+
+See [issue #5](https://gitlab.com/open-works/clade/-/issues/5) (DD-005) for
+the full design rationale.
 
 ---
 
