@@ -29,7 +29,7 @@ packages = ["src/clade"]
 # -----------------------------------------------------------------------------
 [project]
 name            = "django-clade"
-version         = "0.5.0rc1"
+version         = "0.5.0"
 description     = "A Django module for managing hierarchical data models through a node tree, with kinship relationship queries and optional database-native optimisations."
 readme          = "README.md"
 license         = { file = "LICENSE.txt" }

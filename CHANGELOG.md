@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] — 2026-08-21
+
 ### Added
 - `Affinity` model and `AffinityRule` declarative descriptor — materialised,
   non-hierarchical relationships between any two `CladeNode` subclasses that
@@ -152,7 +156,8 @@ References:
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.4.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.5.0...HEAD
+[0.5.0]: https://gitlab.com/open-works/clade/-/releases/v0.5.0
 [0.4.0]: https://gitlab.com/open-works/clade/-/releases/v0.4.0
 [0.3.0]: https://gitlab.com/open-works/clade/-/releases/v0.3.0
 [0.2.0]: https://gitlab.com/open-works/clade/-/releases/v0.2.0
