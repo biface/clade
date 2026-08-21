@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `Affinity` model and `AffinityRule` declarative descriptor — materialised,
+  non-hierarchical relationships between any two `CladeNode` subclasses that
+  share an attribute value under a named `channel` (DD-004, DD-005)
+- `clade.E001` / `clade.E002` system checks — enforce per-model `channel`
+  uniqueness and a scalar-field-only allowlist for `AffinityRule` (DD-005)
+- Bidirectional `post_save` / `post_delete` signal registry — recalculates
+  `Affinity` rows whenever either the declaring model or a passive target
+  model is saved or deleted, so neither side goes stale (DD-005)
+- `affinities_of()` / `affinities_of_grouped()` read helpers, proxied as
+  `CladeNode.affinities()` / `.affinities_grouped()` and on `NodeManager`
+  (DD-005)
+- `HeterogeneousAffinityError` — raised when `affinities_of()` would
+  otherwise need to merge querysets across more than one target model
+- Full documentation site (Sphinx + Furo + MyST-Parser): quickstart,
+  core-concepts, kinship, and Affinity guides, plus an autodoc-generated
+  API reference — published on Read the Docs (DD-017)
+- `README.md` / `README.fr.md` Affinity usage examples
+
+### Changed
+- CI release job promoted to Stage 2 (DD-010) — GitLab Release now created
+  automatically from `CHANGELOG.md` on tag push
+
+### Fixed
+- `.codecov.yml` — component paths corrected to the project's actual flat
+  layout; orphaned `py312` flag removed
+
+References:
+* [DD-004](https://gitlab.com/open-works/clade/-/work_items/4)
+* [DD-005](https://gitlab.com/open-works/clade/-/work_items/5)
+* [DD-010](https://gitlab.com/open-works/clade/-/work_items/31)
+* [DD-017](https://gitlab.com/open-works/clade/-/work_items/78)
 ---
 
 ## [0.4.0] — 2026-07-07
@@ -32,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration parity tests for extended kinship
 - `README.md` / `README.fr.md` usage examples for `piblings()`, `niblings()`,
   `cousins()`
+
+References:
+* [DD-016](https://gitlab.com/open-works/clade/-/work_items/56)
 
 ---
 

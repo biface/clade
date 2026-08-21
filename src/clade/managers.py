@@ -270,3 +270,18 @@ class NodeManager(models.Manager):
 
     def cousins_of(self, node, degree: int = 2):
         return self.get_queryset().cousins_of(node, degree=degree)
+
+    # ── Affinity (DD-005, #70) ──────────────────────────────────────────────
+    # Not NodeQuerySet methods: Affinity queries a different table
+    # (clade.affinity.Affinity), not self.model — logic lives in
+    # clade/affinity.py, these are thin proxies.
+
+    def affinities_of(self, node, channel: str | None = None):
+        from clade.affinity import affinities_of
+
+        return affinities_of(node, channel=channel)
+
+    def affinities_of_grouped(self, node, channel: str | None = None):
+        from clade.affinity import affinities_of_grouped
+
+        return affinities_of_grouped(node, channel=channel)

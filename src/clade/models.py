@@ -65,6 +65,8 @@ class CladeNode(models.Model):
         node.piblings()        → QuerySet
         node.niblings()        → QuerySet
         node.cousins(degree=2) → QuerySet
+        node.affinities(channel=None)         → QuerySet (DD-005, #70)
+        node.affinities_grouped(channel=None) → dict[type, QuerySet]
 
     Ordering
     --------
@@ -175,3 +177,26 @@ class CladeNode(models.Model):
         levels up.
         """
         return type(self).objects.cousins_of(self, degree=degree)
+
+    # ── Affinity (DD-005, #70) ──────────────────────────────────────────────
+
+    def affinities(self, channel: str | None = None):
+        """Return a single QuerySet of this node's Affinity partners.
+
+        Delegates to ``type(self).objects.affinities_of(self, channel=...)``.
+
+        Raises ``clade.affinity.HeterogeneousAffinityError`` if the
+        result would span more than one partner model — use
+        ``affinities_grouped()`` in that case.
+        """
+        return type(self).objects.affinities_of(self, channel=channel)
+
+    def affinities_grouped(self, channel: str | None = None):
+        """Return ``{partner_model: QuerySet}`` of this node's Affinity
+        partners, grouped by model. Never raises — see
+        ``clade.affinity.affinities_of_grouped()``.
+
+        Delegates to
+        ``type(self).objects.affinities_of_grouped(self, channel=...)``.
+        """
+        return type(self).objects.affinities_of_grouped(self, channel=channel)
