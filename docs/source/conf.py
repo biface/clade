@@ -28,7 +28,7 @@ import django  # noqa: E402  (must follow sys.path/env setup above)
 django.setup()
 
 project = "Clade"
-copyright = "2026, open-works"
+copyright = "2026, biface"
 author = "biface"
 
 extensions = [
