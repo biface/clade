@@ -128,8 +128,14 @@ class Affinity(models.Model):
     across both sides, so consistency has exactly one row to maintain per
     relationship rather than two that could drift apart.
 
+    ``is_derived`` distinguishes a direct pair (materialised by the
+    v0.5.0 signal handlers below, DD-005) from a derived pair produced
+    by the declared-rule graph closure (DD-018, v0.6.0). Both kinds
+    share this single table — no separate model.
+
     Do not create or update instances directly — maintained exclusively by
-    the signal handlers wired via ``register_affinity_signals()``.
+    the signal handlers wired via ``register_affinity_signals()`` (direct
+    rows) and the closure engine in ``clade/closure.py`` (derived rows).
     """
 
     objects = models.Manager()
@@ -153,6 +159,16 @@ class Affinity(models.Model):
     channel = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
 
+    is_derived = models.BooleanField(
+        default=False,
+        help_text=(
+            "False for a direct pair materialised by the v0.5.0 signal "
+            "handlers (DD-005). True for a pair produced by the "
+            "declared-rule graph closure (DD-018, v0.6.0) — see "
+            "clade/closure.py."
+        ),
+    )
+
     class Meta:
         indexes = [
             # Duplicated composite index on both sides: post_save/post_delete
@@ -175,7 +191,8 @@ class Affinity(models.Model):
         return (
             f"Affinity(a=({ct_a_id}, {self.object_id_a}), "
             f"b=({ct_b_id}, {self.object_id_b}), "
-            f"channel={self.channel!r}, value={self.value!r})"
+            f"channel={self.channel!r}, value={self.value!r}, "
+            f"is_derived={self.is_derived!r})"
         )
 
 
