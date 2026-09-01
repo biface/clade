@@ -8,6 +8,10 @@
 #
 # Identical DDL on every backend: a plain BooleanField, no conditional
 # DDL involved (DD-015's pattern does not apply here — see 0001_affinity.py).
+#
+# `default=False` needs a targeted type: ignore — django-stubs types
+# BooleanField's `default` param as `type[NOT_PROVIDED]` only in this
+# stub version, same class of limitation as models.py:137.
 # =============================================================================
 
 from django.db import migrations, models
@@ -23,7 +27,7 @@ class Migration(migrations.Migration):
             model_name="affinity",
             name="is_derived",
             field=models.BooleanField(
-                default=False,
+                default=False,  # type: ignore[reportArgumentType]
                 help_text=(
                     "False for a direct pair materialised by the v0.5.0 "
                     "signal handlers (DD-005). True for a pair produced by "

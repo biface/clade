@@ -78,6 +78,12 @@ class AffinityDepartment(CladeNode):
     Mirrors the DD-005 §Declaration example: "geo" on region/cost_center,
     "management" on manager/lead — two simultaneous channels toward the
     same target model.
+
+    "geo" carries ``shared=True`` (DD-018, v0.6.0): AffinityDepartment
+    and AffinityDepartmentAlt both reuse "geo" toward AffinityProject —
+    a genuine junction under ``clade.E003`` — and consent to being
+    chained through it via the declared-rule graph closure. "management"
+    has no such junction and stays ``shared=False`` (the default).
     """
 
     name = models.CharField(max_length=64)
@@ -92,6 +98,7 @@ class AffinityDepartment(CladeNode):
                 to="tests.AffinityProject",
                 target_field="cost_center",
                 channel="geo",
+                shared=True,
             ),
             AffinityRule(
                 "manager",
@@ -114,6 +121,12 @@ class AffinityDepartmentAlt(CladeNode):
     content_type_a scoping in ``_sync_target_instance`` (a naive
     channel-only scope would let this rule's recreate silently wipe out
     AffinityDepartment's "geo" rows for the same AffinityProject).
+
+    ``shared=True`` (DD-018, v0.6.0): mirrors AffinityDepartment's own
+    consent on "geo" — symmetric, per ``clade.E003``. Both sides must
+    consent for AffinityProject to act as a valid pivot for closure
+    under this channel; this fixture pair is the reference case for
+    that opt-in.
     """
 
     name = models.CharField(max_length=64)
@@ -127,6 +140,7 @@ class AffinityDepartmentAlt(CladeNode):
                 to="tests.AffinityProject",
                 target_field="cost_center",
                 channel="geo",
+                shared=True,
             ),
         ]
 

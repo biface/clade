@@ -176,8 +176,11 @@ class Affinity(models.Model):
     channel = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
 
+    # django-stubs types BooleanField's `default` param as
+    # `type[NOT_PROVIDED]` only in this stub version, rejecting an actual
+    # bool default — same class of stub limitation as models.py:137.
     is_derived = models.BooleanField(
-        default=False,
+        default=False,  # type: ignore[reportArgumentType]
         help_text=(
             "False for a direct pair materialised by the v0.5.0 signal "
             "handlers (DD-005). True for a pair produced by the "

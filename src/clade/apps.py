@@ -72,6 +72,7 @@ class CladeConfig(AppConfig):
         from clade.checks import (
             check_affinity_channel_uniqueness,
             check_affinity_field_types,
+            check_affinity_shared_channel_consent,
         )
         from clade.models import CladeNode
         from clade.signals import on_cladenode_delete, on_cladenode_save
@@ -116,8 +117,10 @@ class CladeConfig(AppConfig):
         register_affinity_signals()
 
         # 4. Affinity checks — clade.E001 (channel uniqueness), clade.E002
-        #    (field-type allowlist). Run at `manage.py check` / CI startup.
+        #    (field-type allowlist), clade.E003 (shared-channel consent,
+        #    DD-018). Run at `manage.py check` / CI startup.
         # Each check function returns Error(..., id="clade.EXXX") objects —
         # register() itself takes no id kwarg, only optional tags.
         register_check(check_affinity_channel_uniqueness)
         register_check(check_affinity_field_types)
+        register_check(check_affinity_shared_channel_consent)
