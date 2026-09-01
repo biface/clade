@@ -81,15 +81,31 @@ class AffinityRule:
         target model. Must be unique within a single model's
         ``affinity_rules`` list (enforced by ``clade.E001``) — reusable
         across different source models.
+    shared : bool, default False
+        Opt-in consent, per rule, to let this model act as a pivot for
+        declared-rule graph closure under this ``channel`` name (DD-018,
+        v0.6.0). A model's participation in a channel is only unlocked
+        for chaining once every ``AffinityRule`` touching it under that
+        name carries ``shared=True`` -- one-sided consent still fails
+        ``clade.E003``. Purely declarative here: this flag has no effect
+        on rule resolution or signal wiring by itself, it is read by
+        ``clade.E003`` and the closure engine (``clade/closure.py``).
     """
 
     def __init__(
-        self, local_field: str, *, to: str, target_field: str, channel: str
+        self,
+        local_field: str,
+        *,
+        to: str,
+        target_field: str,
+        channel: str,
+        shared: bool = False,
     ) -> None:
         self.local_field = local_field
         self.to = to
         self.target_field = target_field
         self.channel = channel
+        self.shared = shared
 
     def get_target_model(self) -> type[Model]:
         """Resolve ``to`` to a concrete model class via ``apps.get_model()``.
@@ -105,7 +121,8 @@ class AffinityRule:
     def __repr__(self) -> str:  # pragma: no cover — debugging aid only
         return (
             f"AffinityRule({self.local_field!r}, to={self.to!r}, "
-            f"target_field={self.target_field!r}, channel={self.channel!r})"
+            f"target_field={self.target_field!r}, channel={self.channel!r}, "
+            f"shared={self.shared!r})"
         )
 
 
