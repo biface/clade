@@ -89,7 +89,8 @@ class AffinityRule:
         name carries ``shared=True`` -- one-sided consent still fails
         ``clade.E003``. Purely declarative here: this flag has no effect
         on rule resolution or signal wiring by itself, it is read by
-        ``clade.E003`` and the closure engine (``clade/closure.py``).
+        ``clade.E003`` and the closure engine (``_recompute_shared_closure()``,
+        this module).
     """
 
     def __init__(
@@ -152,7 +153,7 @@ class Affinity(models.Model):
 
     Do not create or update instances directly — maintained exclusively by
     the signal handlers wired via ``register_affinity_signals()`` (direct
-    rows) and the closure engine in ``clade/closure.py`` (derived rows).
+    rows) and ``_recompute_shared_closure()`` below (derived rows).
     """
 
     objects = models.Manager()
@@ -185,7 +186,7 @@ class Affinity(models.Model):
             "False for a direct pair materialised by the v0.5.0 signal "
             "handlers (DD-005). True for a pair produced by the "
             "declared-rule graph closure (DD-018, v0.6.0) — see "
-            "clade/closure.py."
+            "_recompute_shared_closure() in this module."
         ),
     )
 
@@ -436,6 +437,205 @@ def on_affinity_delete(sender, instance, **kwargs) -> None:
         Q(content_type_a=ct, object_id_a=instance.pk)
         | Q(content_type_b=ct, object_id_b=instance.pk)
     ).delete()
+
+
+# =============================================================================
+# Closure engine — derived-pair materialisation (DD-018, #88, v0.6.0).
+#
+# _recompute_shared_closure(channel, seed_instances=None)
+#     The computation only — callable in isolation for testing (#92).
+#     Does not itself decide *when* to run: invalidation wiring
+#     (post_save/post_delete hooks calling this after the existing
+#     DD-005 direct-row resync) is a separate concern (#93).
+#
+# Algorithm: a fixed-point self-join over already-materialised Affinity
+# rows (direct and derived alike) sharing (channel, value) through a
+# common side — repeatedly infer a new pair for every two edges meeting
+# at a shared node, until a pass adds nothing (DD-018: "the same shape
+# as Floyd-Warshall over a finite, bounded set"). Never re-walks
+# AffinityRule or compares field names on the pivot — correctness with
+# respect to DD-004's "same shared value" requirement falls out of row
+# equality on (channel, value), by construction.
+#
+# Restricted to channels with at least one shared=True rule: clade.E003
+# already guarantees that any real junction (a model with degree > 1
+# under a channel) is either fully consented or rejected at declaration
+# time, so a channel with no shared=True rule at all can never contain a
+# junction and closure over it would always be a no-op — skipped
+# entirely as a cheap, correct pre-filter (not a semantic shortcut).
+#
+# Two rows only ever join if they share the same `value` (DD-004:
+# transitivity holds only on directly shared values) — each distinct
+# value under `channel` is therefore an independent closure problem,
+# processed separately.
+# =============================================================================
+
+
+def _channel_has_shared_pivot(channel: str) -> bool:
+    """True if at least one ``AffinityRule`` on *channel* has ``shared=True``.
+
+    Necessary and sufficient as a pre-filter (not merely necessary):
+    ``clade.E003`` rejects any junction (a model with degree > 1 under a
+    channel) unless *every* incident rule is ``shared=True`` — so if no
+    rule on this channel is ``shared=True`` at all, no junction can
+    possibly exist under it, and the self-join below would find nothing
+    to infer.
+    """
+    for rules in _source_registry.values():
+        for rule in rules:
+            if rule.channel == channel and rule.shared:
+                return True
+    return False
+
+
+def _row_endpoints(row: Affinity) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Return the two ``(content_type_id, object_id)`` endpoints of *row*.
+
+    Same ``_id`` shadow-attribute / ``cast(int, ...)`` rationale as
+    ``_other_side`` above: django-stubs types the PK-typed attributes
+    (``object_id_a``/``object_id_b``) as their field class rather than
+    the plain ``int`` they hold at runtime.
+    """
+    ct_a_id = row.content_type_a_id  # type: ignore[reportAttributeAccessIssue]
+    ct_b_id = row.content_type_b_id  # type: ignore[reportAttributeAccessIssue]
+    return (
+        (ct_a_id, cast(int, row.object_id_a)),
+        (ct_b_id, cast(int, row.object_id_b)),
+    )
+
+
+def _close_edge_set(
+    edges: set[frozenset[tuple[int, int]]],
+) -> set[frozenset[tuple[int, int]]]:
+    """Return the transitive closure of *edges* (undirected simple graph).
+
+    Repeated "join through a common side": if ``u-v`` and ``u-w`` are
+    both edges (``v != w``), ``v-w`` is inferred. Iterates to a fixed
+    point — each connected component converges to a complete graph
+    (DD-018: "a ring of shared=True edges simply closes into one
+    clique"). No depth limit, bounded by component size only, per
+    DD-018 §Invalidation.
+    """
+    closed = set(edges)
+    adjacency: dict[tuple[int, int], set[tuple[int, int]]] = {}
+    for edge in closed:
+        u, v = tuple(edge)
+        adjacency.setdefault(u, set()).add(v)
+        adjacency.setdefault(v, set()).add(u)
+
+    changed = True
+    while changed:
+        changed = False
+        newly_found: set[frozenset[tuple[int, int]]] = set()
+        for node, neighbors in adjacency.items():
+            neighbor_list = list(neighbors)
+            for i, v in enumerate(neighbor_list):
+                for w in neighbor_list[i + 1 :]:
+                    if v == w:
+                        continue
+                    pair = frozenset((v, w))
+                    if pair not in closed:
+                        newly_found.add(pair)
+        if newly_found:
+            changed = True
+            closed |= newly_found
+            for pair in newly_found:
+                u, v = tuple(pair)
+                adjacency.setdefault(u, set()).add(v)
+                adjacency.setdefault(v, set()).add(u)
+    return closed
+
+
+def _close_one_value(channel: str, value: str) -> int:
+    """Close the (channel, value) group — one independent closure problem.
+
+    Reads every existing row (direct + derived) for this exact
+    ``(channel, value)`` pair, computes the transitive closure in
+    memory, and inserts one ``Affinity(..., is_derived=True)`` row per
+    pair the closure adds that wasn't already present. Idempotent: a
+    group with no new implied pair creates nothing (#92 acceptance:
+    rerunning on an already-closed set is a no-op).
+    """
+    rows = list(Affinity.objects.filter(channel=channel, value=value))
+    existing: set[frozenset[tuple[int, int]]] = set()
+    for row in rows:
+        a, b = _row_endpoints(row)
+        if a != b:  # defensive: self-loops are not expected to exist
+            existing.add(frozenset((a, b)))
+
+    closed = _close_edge_set(existing)
+    new_pairs = closed - existing
+    if not new_pairs:
+        return 0
+
+    to_create = []
+    for pair in new_pairs:
+        (ct_a_id, obj_a), (ct_b_id, obj_b) = sorted(pair)
+        to_create.append(
+            Affinity(
+                content_type_a=ContentType.objects.get_for_id(ct_a_id),
+                object_id_a=obj_a,
+                content_type_b=ContentType.objects.get_for_id(ct_b_id),
+                object_id_b=obj_b,
+                channel=channel,
+                value=value,
+                is_derived=True,
+            )
+        )
+    Affinity.objects.bulk_create(to_create)
+    return len(to_create)
+
+
+def _values_for_instances(instances, channel: str) -> set[str]:
+    """Distinct ``value``s that *instances* currently participate in
+    under *channel* (direct or derived rows, either side)."""
+    values: set[str] = set()
+    for instance in instances:
+        ct = ContentType.objects.get_for_model(type(instance))
+        rows = Affinity.objects.filter(
+            Q(content_type_a=ct, object_id_a=instance.pk)
+            | Q(content_type_b=ct, object_id_b=instance.pk),
+            channel=channel,
+        ).values_list("value", flat=True)
+        values.update(rows)
+    return values
+
+
+def _recompute_shared_closure(channel: str, seed_instances=None) -> int:
+    """Recompute the derived-pair closure for *channel* (DD-018, #92).
+
+    Restricted to channels with at least one ``shared=True`` rule (see
+    ``_channel_has_shared_pivot``) — a channel with no such consent is
+    left exactly as DD-005 already handles it: no derived rows, ever.
+
+    ``seed_instances`` — a single node or an iterable of nodes — scopes
+    the recomputation to the ``(channel, value)`` group(s) those
+    instances currently participate in, rather than every value ever
+    seen under *channel* (DD-018 §Invalidation: cost scales with
+    component size, not with the whole channel). Omit it (``None``,
+    the default) to recompute every value under *channel* in one call —
+    the mode used here for direct, isolated testing; #93 wires the
+    scoped mode into the post_save/post_delete invalidation path.
+
+    Returns the number of new derived rows created (0 if the channel
+    isn't shared, no seed value groups were found, or the closure was
+    already complete).
+    """
+    if not _channel_has_shared_pivot(channel):
+        return 0
+
+    if seed_instances is not None:
+        if hasattr(seed_instances, "_meta"):
+            seed_instances = [seed_instances]
+        values = _values_for_instances(seed_instances, channel)
+        if not values:
+            return 0
+    else:
+        values = set(
+            Affinity.objects.filter(channel=channel).values_list("value", flat=True)
+        )
+
+    return sum(_close_one_value(channel, value) for value in values)
 
 
 # =============================================================================
