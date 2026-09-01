@@ -417,11 +417,32 @@ def on_affinity_save(sender, instance, **kwargs) -> None:
     Handles both roles independently — a model may declare rules
     (source) *and* be named as a target by another rule at the same
     time; both branches run when applicable.
+
+    Closure invalidation (DD-018, #93): captures which
+    shared=True-eligible ``(channel, value)`` groups *instance*
+    belonged to *before* the direct-row resync below, then again
+    *after* — the union of both is exactly the set of groups whose
+    derived pairs may now be stale (old value no longer connects
+    through *instance*) or incomplete (new value may connect it to a
+    fresh chain). Each affected group is wiped and recomputed fresh
+    (see ``_reclose_channel_values``). A no-op, save-the-one-query
+    check when *sender* touches no shared=True channel at all.
     """
+    relevant_channels = _shared_channels_for(sender)
+    old_pairs = (
+        _instance_values_by_channel(instance, sender, relevant_channels)
+        if relevant_channels
+        else {}
+    )
+
     for rule in _source_registry.get(sender, []):
         _sync_source_instance(instance, sender, rule)
     for source_model, rule in _target_registry.get(sender, []):
         _sync_target_instance(instance, sender, source_model, rule)
+
+    if relevant_channels:
+        new_pairs = _instance_values_by_channel(instance, sender, relevant_channels)
+        _reclose_channel_values(_merge_channel_values(old_pairs, new_pairs))
 
 
 def on_affinity_delete(sender, instance, **kwargs) -> None:
@@ -431,12 +452,33 @@ def on_affinity_delete(sender, instance, **kwargs) -> None:
     Unconditional — does not consult the registry, since a deleted
     instance's rows must be purged even if it no longer resolves to a
     live rule (e.g. mid-refactor, or a target-only model).
+
+    Closure invalidation (DD-018, #93): the ``(channel, value)`` groups
+    *instance* belonged to must be captured *before* the purge below —
+    once its rows are gone, there is no longer any record of what it
+    was connected to. A bridging node's own direct rows never carry the
+    derived pairs that depended on it (e.g. deleting ``P`` removes
+    ``D-P``/``P-S`` but not the derived ``D-S`` row, which references
+    only ``D`` and ``S``) — ``_reclose_channel_values`` wipes and
+    recomputes each affected group so an unjustified derived pair is
+    dropped, and one still reachable through an alternate pivot is
+    recreated.
     """
+    relevant_channels = _shared_channels_for(sender)
+    old_pairs = (
+        _instance_values_by_channel(instance, sender, relevant_channels)
+        if relevant_channels
+        else {}
+    )
+
     ct = ContentType.objects.get_for_model(sender)
     Affinity.objects.filter(
         Q(content_type_a=ct, object_id_a=instance.pk)
         | Q(content_type_b=ct, object_id_b=instance.pk)
     ).delete()
+
+    if old_pairs:
+        _reclose_channel_values(old_pairs)
 
 
 # =============================================================================
@@ -457,12 +499,15 @@ def on_affinity_delete(sender, instance, **kwargs) -> None:
 # respect to DD-004's "same shared value" requirement falls out of row
 # equality on (channel, value), by construction.
 #
-# Restricted to channels with at least one shared=True rule: clade.E003
-# already guarantees that any real junction (a model with degree > 1
-# under a channel) is either fully consented or rejected at declaration
-# time, so a channel with no shared=True rule at all can never contain a
-# junction and closure over it would always be a no-op — skipped
-# entirely as a cheap, correct pre-filter (not a semantic shortcut).
+# Restricted to channels with at least one genuine declared-rule
+# junction (a model touched by more than one distinct AffinityRule
+# under the channel, all consenting via shared=True — exactly the
+# clade.E003 graph). A model matched by a *single* rule fanning out to
+# several target instances (ordinary DD-005 behaviour — e.g. one
+# Department matching several Projects sharing a region) is never
+# mistaken for a chain, no matter how many rows it produces: the
+# pivot restriction operates at the declared-rule (model) level, not
+# by counting rows at the instance level.
 #
 # Two rows only ever join if they share the same `value` (DD-004:
 # transitivity holds only on directly shared values) — each distinct
@@ -471,21 +516,50 @@ def on_affinity_delete(sender, instance, **kwargs) -> None:
 # =============================================================================
 
 
-def _channel_has_shared_pivot(channel: str) -> bool:
-    """True if at least one ``AffinityRule`` on *channel* has ``shared=True``.
+def _consented_pivot_models(channel: str) -> set[type[Model]]:
+    """Models that are genuine declared-rule junctions under *channel*:
+    touched by more than one distinct ``AffinityRule`` (as source or
+    target), every one of which carries ``shared=True``.
 
-    Necessary and sufficient as a pre-filter (not merely necessary):
-    ``clade.E003`` rejects any junction (a model with degree > 1 under a
-    channel) unless *every* incident rule is ``shared=True`` — so if no
-    rule on this channel is ``shared=True`` at all, no junction can
-    possibly exist under it, and the self-join below would find nothing
-    to infer.
+    Mirrors ``clade.E003``'s own graph (``checks.py``), rebuilt here
+    from ``_source_registry`` rather than imported, to avoid a
+    dependency from ``clade/affinity.py`` on ``clade/checks.py``. A
+    model touched by only one rule under *channel* is never a valid
+    pivot — DD-018's closure connects two *different* declared
+    relationships through a shared model; it is not triggered by a
+    single relationship fanning out to several matching instances.
+    Deduplicates by rule identity so a rule that names its own
+    declaring model as its target does not inflate degree to 2 from a
+    single edge.
     """
-    for rules in _source_registry.values():
+    incident: dict[type[Model], dict[int, AffinityRule]] = {}
+    for source, rules in _source_registry.items():
         for rule in rules:
-            if rule.channel == channel and rule.shared:
-                return True
-    return False
+            if rule.channel != channel:
+                continue
+            try:
+                target = rule.get_target_model()
+            except LookupError:
+                continue
+            incident.setdefault(source, {})[id(rule)] = rule
+            incident.setdefault(target, {})[id(rule)] = rule
+
+    return {
+        model
+        for model, rules_by_id in incident.items()
+        if len(rules_by_id) > 1 and all(r.shared for r in rules_by_id.values())
+    }
+
+
+def _consented_pivot_content_type_ids(channel: str) -> set[int]:
+    """``ContentType`` ids for ``_consented_pivot_models(channel)`` —
+    the representation the closure below actually needs, since row
+    endpoints are ``(content_type_id, object_id)`` tuples, not classes.
+    """
+    return {
+        ContentType.objects.get_for_model(model).pk
+        for model in _consented_pivot_models(channel)
+    }
 
 
 def _row_endpoints(row: Affinity) -> tuple[tuple[int, int], tuple[int, int]]:
@@ -506,15 +580,24 @@ def _row_endpoints(row: Affinity) -> tuple[tuple[int, int], tuple[int, int]]:
 
 def _close_edge_set(
     edges: set[frozenset[tuple[int, int]]],
+    pivot_content_type_ids: set[int],
 ) -> set[frozenset[tuple[int, int]]]:
-    """Return the transitive closure of *edges* (undirected simple graph).
+    """Return the transitive closure of *edges* (undirected simple graph),
+    joining only through nodes whose model is a consented pivot.
 
     Repeated "join through a common side": if ``u-v`` and ``u-w`` are
-    both edges (``v != w``), ``v-w`` is inferred. Iterates to a fixed
-    point — each connected component converges to a complete graph
-    (DD-018: "a ring of shared=True edges simply closes into one
-    clique"). No depth limit, bounded by component size only, per
-    DD-018 §Invalidation.
+    both edges and ``u``'s model is in *pivot_content_type_ids*
+    (``v != w``), ``v-w`` is inferred. A node whose model is *not* a
+    consented pivot can be the endpoint of as many edges as it likes
+    without ever acting as a hinge — this is what keeps ordinary DD-005
+    fan-out (one node matching several partners under a single rule)
+    from being mistaken for a declared-rule chain.
+
+    Iterates to a fixed point — each connected component converges to
+    a complete graph over its consented-pivot-reachable nodes (DD-018:
+    "a ring of shared=True edges simply closes into one clique"). No
+    depth limit, bounded by component size only, per DD-018
+    §Invalidation.
     """
     closed = set(edges)
     adjacency: dict[tuple[int, int], set[tuple[int, int]]] = {}
@@ -528,6 +611,8 @@ def _close_edge_set(
         changed = False
         newly_found: set[frozenset[tuple[int, int]]] = set()
         for node, neighbors in adjacency.items():
+            if node[0] not in pivot_content_type_ids:
+                continue
             neighbor_list = list(neighbors)
             for i, v in enumerate(neighbor_list):
                 for w in neighbor_list[i + 1 :]:
@@ -546,15 +631,16 @@ def _close_edge_set(
     return closed
 
 
-def _close_one_value(channel: str, value: str) -> int:
+def _close_one_value(channel: str, value: str, pivot_content_type_ids: set[int]) -> int:
     """Close the (channel, value) group — one independent closure problem.
 
     Reads every existing row (direct + derived) for this exact
     ``(channel, value)`` pair, computes the transitive closure in
-    memory, and inserts one ``Affinity(..., is_derived=True)`` row per
-    pair the closure adds that wasn't already present. Idempotent: a
-    group with no new implied pair creates nothing (#92 acceptance:
-    rerunning on an already-closed set is a no-op).
+    memory (restricted to *pivot_content_type_ids*), and inserts one
+    ``Affinity(..., is_derived=True)`` row per pair the closure adds
+    that wasn't already present. Idempotent: a group with no new
+    implied pair creates nothing (#92 acceptance: rerunning on an
+    already-closed set is a no-op).
     """
     rows = list(Affinity.objects.filter(channel=channel, value=value))
     existing: set[frozenset[tuple[int, int]]] = set()
@@ -563,7 +649,7 @@ def _close_one_value(channel: str, value: str) -> int:
         if a != b:  # defensive: self-loops are not expected to exist
             existing.add(frozenset((a, b)))
 
-    closed = _close_edge_set(existing)
+    closed = _close_edge_set(existing, pivot_content_type_ids)
     new_pairs = closed - existing
     if not new_pairs:
         return 0
@@ -601,12 +687,106 @@ def _values_for_instances(instances, channel: str) -> set[str]:
     return values
 
 
+# =============================================================================
+# Invalidation wiring (DD-018 §Invalidation, #93).
+#
+# Extends on_affinity_save/on_affinity_delete above — no new signal
+# connections. Both invalidation triggers named in DD-018 (deleting a
+# bridging node, changing a pivot's value away from the shared value)
+# reduce to the same operation: wipe every derived row in the affected
+# (channel, value) group(s) and recompute the closure fresh from
+# whatever direct (and, for save, still-valid derived) rows remain —
+# the same delete-then-recreate philosophy DD-005 already applies to
+# direct rows, extended here to derived ones.
+#
+# _shared_channels_for()          Which of *model*'s channels can ever
+#                                  need this (cheap pre-filter, reuses
+#                                  _consented_pivot_models).
+# _instance_values_by_channel()   channel -> {value, ...} snapshot for
+#                                  one instance, at a point in time.
+# _merge_channel_values()         Union several such snapshots.
+# _reclose_channel_values()       Wipe + recompute for each (channel,
+#                                  value) pair in a snapshot.
+# =============================================================================
+
+
+def _shared_channels_for(model: type[Model]) -> set[str]:
+    """Channels *model* participates in (as source or target) that have
+    at least one genuine consented pivot (``_consented_pivot_models``)
+    — the only channels where a save/delete on *model* could ever
+    affect a derived row. Empty for the common case of a project with
+    no declared-rule junction at all, making the save/delete hot path
+    a single dict lookup.
+    """
+    channels = {rule.channel for rule in _source_registry.get(model, [])}
+    channels |= {rule.channel for _, rule in _target_registry.get(model, [])}
+    return {channel for channel in channels if _consented_pivot_models(channel)}
+
+
+def _instance_values_by_channel(
+    instance, model: type[Model], channels: set[str]
+) -> dict[str, set[str]]:
+    """Snapshot: ``channel -> {value, ...}`` for *instance*, restricted
+    to *channels*, from whatever ``Affinity`` rows reference it (either
+    side, direct or derived) at the moment this is called. Callers take
+    this snapshot both before and after a resync to see what changed.
+    """
+    if not channels:
+        return {}
+    ct = ContentType.objects.get_for_model(model)
+    rows = Affinity.objects.filter(
+        Q(content_type_a=ct, object_id_a=instance.pk)
+        | Q(content_type_b=ct, object_id_b=instance.pk),
+        channel__in=channels,
+    ).values_list("channel", "value")
+
+    result: dict[str, set[str]] = {}
+    for channel, value in rows:
+        result.setdefault(channel, set()).add(value)
+    return result
+
+
+def _merge_channel_values(
+    *snapshots: dict[str, set[str]],
+) -> dict[str, set[str]]:
+    """Union several ``channel -> {value, ...}`` snapshots into one."""
+    merged: dict[str, set[str]] = {}
+    for snapshot in snapshots:
+        for channel, values in snapshot.items():
+            merged.setdefault(channel, set()).update(values)
+    return merged
+
+
+def _reclose_channel_values(pairs: dict[str, set[str]]) -> None:
+    """Wipe every derived row in each ``(channel, value)`` group in
+    *pairs*, then recompute that group's closure fresh.
+
+    No dependency tracking exists between a derived row and the pivot
+    that justified it, so a full wipe-and-recompute per affected group
+    is the only way to guarantee correctness after a topology change —
+    both DD-018 invalidation triggers (bridging-node deletion, pivot
+    value change) reduce to exactly this. Each ``(channel, value)`` is
+    an independent closure problem (DD-004: transitivity only holds on
+    a directly shared value), so groups never interact with each other.
+    """
+    for channel, values in pairs.items():
+        pivot_content_type_ids = _consented_pivot_content_type_ids(channel)
+        if not pivot_content_type_ids:
+            continue
+        for value in values:
+            Affinity.objects.filter(
+                channel=channel, value=value, is_derived=True
+            ).delete()
+            _close_one_value(channel, value, pivot_content_type_ids)
+
+
 def _recompute_shared_closure(channel: str, seed_instances=None) -> int:
     """Recompute the derived-pair closure for *channel* (DD-018, #92).
 
-    Restricted to channels with at least one ``shared=True`` rule (see
-    ``_channel_has_shared_pivot``) — a channel with no such consent is
-    left exactly as DD-005 already handles it: no derived rows, ever.
+    Restricted to channels with at least one genuine consented pivot
+    (see ``_consented_pivot_models``) — a channel with no such junction
+    is left exactly as DD-005 already handles it: no derived rows,
+    ever.
 
     ``seed_instances`` — a single node or an iterable of nodes — scopes
     the recomputation to the ``(channel, value)`` group(s) those
@@ -618,10 +798,11 @@ def _recompute_shared_closure(channel: str, seed_instances=None) -> int:
     scoped mode into the post_save/post_delete invalidation path.
 
     Returns the number of new derived rows created (0 if the channel
-    isn't shared, no seed value groups were found, or the closure was
-    already complete).
+    has no consented pivot, no seed value groups were found, or the
+    closure was already complete).
     """
-    if not _channel_has_shared_pivot(channel):
+    pivot_content_type_ids = _consented_pivot_content_type_ids(channel)
+    if not pivot_content_type_ids:
         return 0
 
     if seed_instances is not None:
@@ -635,7 +816,9 @@ def _recompute_shared_closure(channel: str, seed_instances=None) -> int:
             Affinity.objects.filter(channel=channel).values_list("value", flat=True)
         )
 
-    return sum(_close_one_value(channel, value) for value in values)
+    return sum(
+        _close_one_value(channel, value, pivot_content_type_ids) for value in values
+    )
 
 
 # =============================================================================
