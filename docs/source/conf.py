@@ -14,6 +14,7 @@
 
 import os
 import sys
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -30,6 +31,16 @@ django.setup()
 project = "Clade"
 copyright = "2026, biface"
 author = "biface"
+
+# Read from the installed package's metadata (pyproject.toml [project].version)
+# rather than duplicating it here — tox installs django-clade into every
+# environment, docs included (.tox-config/requirements/docs.txt), so this
+# always reflects the version actually being built, RC or final, with a
+# single source of truth. `release` is the full string (e.g. "0.6.0rc1"),
+# `version` the short X.Y form Sphinx/Furo use for the sidebar, per Sphinx
+# convention.
+release = _pkg_version("django-clade")
+version = ".".join(release.split(".")[:2])
 
 extensions = [
     "sphinx.ext.autodoc",
