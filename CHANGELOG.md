@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `Affinity.is_derived` field — distinguishes a materialised pair produced
+  by transitive closure from a direct one; both are returned together by
+  `affinities_of()` / `affinities_of_grouped()` (DD-018)
+- `AffinityRule.shared` keyword-only parameter (default `False`) — opt-in,
+  per-rule consent for a model to act as a pivot connecting two declared
+  relationships under the same `channel` (DD-018)
+- `clade.E003` system check — rejects a declared-rule junction where
+  `shared` consent isn't unanimous across every rule touching it, or is
+  given on only one side (DD-018)
+- Declared-rule graph closure — once every rule at a junction consents,
+  Clade derives and stores the transitive Affinity pairs automatically,
+  keeping them correct as bridging instances are saved, deleted, or change
+  value (DD-018)
+- Affinity concept guide (`concepts/affinity.md`) extended with the
+  transitivity mechanism, `shared`, and `clade.E003` (DD-017, DD-018)
+
+References:
+* [DD-017](https://gitlab.com/open-works/clade/-/work_items/78)
+* [DD-018](https://gitlab.com/open-works/clade/-/work_items/88)
+
 ---
 
 ## [0.5.0] — 2026-08-21
