@@ -6,17 +6,25 @@
 # clade.E002   local_field/target_field must be one of an explicit
 #              allowlist of scalar field types (DD-005 §Constraints,
 #              amended — see comment on #5).
+# clade.E003   symmetric shared=True consent required to let a model
+#              act as a pivot for declared-rule graph closure under a
+#              given channel (DD-018 §Guard against accidental chaining).
 #
-# Both checks fail at `manage.py check` / CI startup — never silently at
-# write time. Registered from CladeConfig.ready() via
-# django.core.checks.register().
+# All three checks fail at `manage.py check` / CI startup — never
+# silently at write time or from instance data. Registered from
+# CladeConfig.ready() via django.core.checks.register().
 #
-# Refs: DD-005 (#5, amendment: field-type allowlist)
+# Refs: DD-005 (#5, amendment: field-type allowlist), DD-018 (#88)
 # =============================================================================
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.core.checks import Error
+
+if TYPE_CHECKING:
+    from clade.affinity import AffinityRule
 
 # Allowlist, not a blacklist (DD-005 amendment): an unrecognised or future
 # field type is rejected by default rather than silently accepted.
@@ -136,3 +144,96 @@ def _check_field(declaring_model, field_name, rule, field_owner_model) -> list[E
             id="clade.E002",
         )
     ]
+
+
+def _iter_affinity_edges():
+    """Yield ``(source_model, target_model, rule)`` for every resolvable rule.
+
+    One edge per declared ``AffinityRule`` whose ``to`` resolves to a real
+    model. Unresolvable ``to`` (``LookupError``) is skipped, same as
+    ``clade.E002`` — a separate, not-yet-implemented check would cover a
+    dangling reference.
+    """
+    for model, rules in _iter_affinity_declaring_models():
+        for rule in rules:
+            try:
+                target_model = rule.get_target_model()
+            except LookupError:
+                continue
+            yield model, target_model, rule
+
+
+def check_affinity_shared_channel_consent(app_configs, **kwargs):
+    """clade.E003 — symmetric ``shared=True`` consent for channel reuse.
+
+    Following declared-rule chains at closure time (DD-018) introduces a
+    naming-collision risk: two ``AffinityRule``s declared independently
+    can reuse the same ``channel`` name for unrelated purposes and, if
+    they share a common model as an endpoint, silently form a chain
+    nobody intended.
+
+    For a given ``channel`` name, build the graph of edges (declaring
+    model <-> resolved target model) carrying that name. Any model with
+    degree > 1 in that graph is a junction: the chain through it is
+    rejected unless **every** incident ``AffinityRule`` carries
+    ``shared=True`` — one-sided consent still fails. Two edges sharing a
+    channel name with no common model are never flagged, ``shared`` or
+    not: only a genuine junction triggers this check.
+
+    Schema/declaration-time only — built entirely from
+    ``Meta.affinity_rules`` across the app registry, never from instance
+    data or ``value``.
+    """
+    edges_by_channel: dict[str, list[tuple[type, type, AffinityRule]]] = {}
+    for source, target, rule in _iter_affinity_edges():
+        edges_by_channel.setdefault(rule.channel, []).append((source, target, rule))
+
+    errors: list[Error] = []
+    for channel, edges in edges_by_channel.items():
+        incident: dict[type, list[tuple[type, type, AffinityRule]]] = {}
+        for edge in edges:
+            source, target, _rule = edge
+            incident.setdefault(source, []).append(edge)
+            incident.setdefault(target, []).append(edge)
+
+        for model, model_edges in incident.items():
+            # Deduplicate: a rule targeting its own declaring model under
+            # this channel is appended to `incident[model]` twice (once
+            # as source, once as target) — dedupe by rule identity so a
+            # single self-referencing edge is never mistaken for a
+            # junction of degree 2.
+            unique_edges = list(
+                {
+                    id(rule): (source, target, rule)
+                    for source, target, rule in model_edges
+                }.values()
+            )
+            if len(unique_edges) <= 1:
+                continue
+
+            non_consenting = [e for e in unique_edges if not e[2].shared]
+            if not non_consenting:
+                continue
+
+            model_label = model._meta.label  # type: ignore[reportAttributeAccessIssue]
+            edge_descriptions = ", ".join(
+                f"{src._meta.label}->{tgt._meta.label} (shared={rule.shared!r})"
+                for src, tgt, rule in unique_edges
+            )
+            errors.append(
+                Error(
+                    f"{model_label} is a junction for Affinity channel "
+                    f"{channel!r} (edges: {edge_descriptions}) but not "
+                    "every incident AffinityRule has shared=True.",
+                    hint=(
+                        "Declared-rule graph closure (DD-018) only "
+                        f"chains through {model_label} under channel "
+                        f"{channel!r} if every AffinityRule touching it "
+                        "under that name sets shared=True — one-sided "
+                        "consent is rejected."
+                    ),
+                    obj=model,
+                    id="clade.E003",
+                )
+            )
+    return errors
