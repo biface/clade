@@ -22,12 +22,14 @@ from clade.checks import check_affinity_channel_uniqueness, check_affinity_field
 from tests.models import AffinityDepartment, AffinityDepartmentAlt, AffinityProject
 
 
-def _pairs(channel=None):
+def _pairs(channel=None, is_derived=None):
     """Return {(side_a, side_b)} for readable assertions, optionally
-    filtered to one channel."""
+    filtered to one channel and/or by is_derived (DD-005 vs DD-018)."""
     qs = Affinity.objects.all()
     if channel is not None:
         qs = qs.filter(channel=channel)
+    if is_derived is not None:
+        qs = qs.filter(is_derived=is_derived)
     return {(a.side_a, a.side_b) for a in qs}
 
 
@@ -113,13 +115,17 @@ class TestAffinityChannelCollision:
         d1 = AffinityDepartment.objects.create(name="D1", region="paris")
         d2 = AffinityDepartmentAlt.objects.create(name="D2", zone="paris")
 
-        assert _pairs("geo") == {(d1, p1), (d2, p1)}
+        # Direct rows only (DD-005 scope of this test): AffinityProject
+        # is a consented DD-018 pivot as of v0.6.0 (#91), so a legitimate
+        # derived (d1, d2) pair now also exists under "geo" — covered by
+        # the closure engine's own tests (#92/#94), not here.
+        assert _pairs("geo", is_derived=False) == {(d1, p1), (d2, p1)}
 
         # Re-saving p1 (target-side resync for BOTH rules) must not drop
         # either source's row.
         p1.save()
 
-        assert _pairs("geo") == {(d1, p1), (d2, p1)}
+        assert _pairs("geo", is_derived=False) == {(d1, p1), (d2, p1)}
 
 
 @pytest.mark.django_db
