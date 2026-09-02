@@ -12,12 +12,13 @@
 
 ## Status
 
-**Pre-alpha** — `v0.4.0` published. API not yet stable.
+**Pre-alpha** — `v0.6.0` published. API not yet stable.
 
-| Version | Status | Content |
-|---|---|---|
-| `v0.4.0` | ✅ Current | Extended kinship (pibling, nibling, cousin — symmetric degree) |
-| `v0.5.0` | 🔄 Next | Affinity model & storage decision (DD-005) |
+| Version | Status | Content                                                                                            |
+|---|---|----------------------------------------------------------------------------------------------------|
+| `v0.4.0` | ✅ Published | Extended kinship (pibling, nibling, cousin — symmetric degree)                                     |
+| `v0.5.0` | ✅ Published | Affinity model & storage decision ([DD-005](https://gitlab.com/open-works/clade/-/work_items/5))   |
+| `v0.6.0` | ✅ Current | Affinity transitivity & consistency ([DD-018](https://gitlab.com/open-works/clade/-/work_items/88)) |
 
 See the [milestones](https://gitlab.com/open-works/clade/-/milestones) and
 [open issues](https://gitlab.com/open-works/clade/-/issues) on GitLab for the
@@ -123,7 +124,7 @@ rationale and the planned post-v1.0.0 extension.
 
 ---
 
-## Affinity (v0.5.0)
+## Affinity (v0.5.0, v0.6.0)
 
 **Affinity** models a *non-hierarchical* relationship: two nodes that share an
 attribute value, with no parent/child link between them. It's inter-model by
@@ -178,6 +179,34 @@ paris_dept.affinities_grouped(channel="geo")
 # {Project: <QuerySet [paris_proj]>}
 ```
 
+**Transitivity (v0.6.0):** by default only the relationships an `AffinityRule`
+names directly are materialised. Two rules can be chained through a shared
+model by opting in on *both* sides with `shared=True` — say `Department`'s
+existing `"geo"` rule above gains `shared=True`, and `Project` gains a
+second rule, reusing its own `cost_center`, onward to a new `Site` model:
+
+```python
+class Site(CladeNode):
+    name   = models.CharField(max_length=255)
+    region = models.CharField(max_length=255, null=True, blank=True)
+
+
+# Department.Meta.affinity_rules — the existing "geo" rule, now consenting:
+AffinityRule("region", to="myapp.Project", target_field="cost_center",
+             channel="geo", shared=True)
+
+# Project.Meta.affinity_rules — a new rule alongside the existing ones:
+AffinityRule("cost_center", to="myapp.Site", target_field="region",
+             channel="geo", shared=True)
+```
+
+With both ends consenting, `Department`↔`Site` is derived and stored
+automatically (`Affinity.is_derived=True`) whenever `Department`↔`Project`
+and `Project`↔`Site` share the same value under `"geo"`. One-sided consent
+is rejected at `manage.py check` time (`clade.E003`), naming the model
+where consent is incomplete. Derived pairs stay correct automatically as
+data changes — deleting or changing the bridging instance recomputes them.
+
 **Constraints:**
 - `local_field`/`target_field` must be one of a fixed allowlist of scalar
   field types (`CharField`, `IntegerField`, `DateField`, `BooleanField`,
@@ -186,12 +215,11 @@ paris_dept.affinities_grouped(channel="geo")
   `ForeignKey`/`OneToOneField` are rejected.
 - `channel` must be unique within a single model's `affinity_rules` list
   (`clade.E001`) — but is freely reusable across different source models.
-- Multi-hop transitive closure (A~B and B~C ⟹ A~C through an intermediate
-  node neither A nor B declares a rule toward) is **not** computed in
-  v0.5.0 — deferred to v0.6.0. Only the direct relationships an
-  `AffinityRule` explicitly names are materialised.
+- Transitivity is opt-in, not automatic (`shared=True`, `clade.E003`) — see
+  above.
 
-See [issue #5](https://gitlab.com/open-works/clade/-/issues/5) (DD-005) for
+See [issue #5](https://gitlab.com/open-works/clade/-/issues/5) (DD-005) and
+[issue #88](https://gitlab.com/open-works/clade/-/issues/88) (DD-018) for
 the full design rationale.
 
 ---

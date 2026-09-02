@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] — 2026-09-02
+
 ### Added
 - `Affinity.is_derived` field — distinguishes a materialised pair produced
   by transitive closure from a direct one; both are returned together by
@@ -177,7 +181,8 @@ References:
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.5.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.6.0...HEAD
+[0.6.0]: https://gitlab.com/open-works/clade/-/releases/v0.6.0
 [0.5.0]: https://gitlab.com/open-works/clade/-/releases/v0.5.0
 [0.4.0]: https://gitlab.com/open-works/clade/-/releases/v0.4.0
 [0.3.0]: https://gitlab.com/open-works/clade/-/releases/v0.3.0
