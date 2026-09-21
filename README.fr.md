@@ -13,13 +13,14 @@
 
 ## Statut
 
-**Pré-alpha** — `v0.6.0` publié. L'API n'est pas encore stable.
+**Pré-alpha** — `v0.7.0` publié. L'API n'est pas encore stable.
 
 | Version | Statut | Contenu                                                                                                 |
 |---|---|---------------------------------------------------------------------------------------------------------|
 | `v0.4.0` | ✅ Publiée | Parenté étendue (pibling, nibling, cousin — degré symétrique)                                           |
 | `v0.5.0` | ✅ Publiée | Modèle Affinité & décision de stockage ([DD-005](https://gitlab.com/open-works/clade/-/work_items/5))   |
-| `v0.6.0` | ✅ Actuelle | Transitivité et cohérence de l'Affinité ([DD-018](https://gitlab.com/open-works/clade/-/work_items/88)) |
+| `v0.6.0` | ✅ Publiée | Transitivité et cohérence de l'Affinité ([DD-018](https://gitlab.com/open-works/clade/-/work_items/88)) |
+| `v0.7.0` | ✅ Actuelle | Backend MariaDB vérifié en CI ([DD-019](https://gitlab.com/open-works/clade/-/work_items/100))          |
 
 Voir les [jalons](https://gitlab.com/open-works/clade/-/milestones) et les
 [issues](https://gitlab.com/open-works/clade/-/issues) sur GitLab pour la
