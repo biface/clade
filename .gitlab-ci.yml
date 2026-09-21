@@ -8,7 +8,7 @@
 #               every push + MR
 #   test        pytest matrix (Django 5.2 × py310–313) + migrations
 #               every push + MR, after check
-#   integrate   PostgreSQL + ltree backend validation
+#   integrate   PostgreSQL + ltree and MariaDB backend validation
 #               version tags + scheduled pipelines
 #   cover       Coverage report (py312) + Codecov upload
 #               main branch, MR→main, version tags
@@ -288,6 +288,65 @@ integrate:postgresql:
   script:
     - tox -e integration-ci
 
+# MariaDB backend validation — CI ONLY (DD-019).
+# Same trigger rules and same `needs` as integrate:postgresql. There is no
+# local counterpart on purpose: no settings_*_local module, no local tox
+# environment. tests/test_integration.py, test_affinity_integration.py and
+# test_affinity_transitivity_integration.py run unmodified, except that the
+# three PostgreSQL-only checks skip themselves on this backend (#103).
+#
+# MariaDB setup
+# ─────────────
+# The service container is throwaway, so the job connects as root: Django
+# must create and drop test_clade_test, which the single-schema grant of
+# MARIADB_USER would not allow.
+# mysqlclient compiles at install time — libmariadb-dev and pkg-config are
+# installed in before_script (python:3.12 already ships a compiler).
+# The retry loop waits for the server, then logs its version and default
+# character set / collation: the collation is what concepts/affinity.md
+# documents as a deployer-side concern (#104).
+#
+# Refs: DD-003 (#3), DD-011 (#32), DD-019 (#100)
+
+integrate:mariadb:
+  stage: integrate
+  image: python:3.12
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(rc\d+)?$/'
+  needs:
+    - check:basedpyright
+    - check:flake8
+    - check:black
+    - check:isort
+    - check:bandit
+  services:
+    - name: mariadb:11.4
+      alias: mariadb
+  variables:
+    MARIADB_ROOT_PASSWORD:  "$CLADE_DB_PASSWORD"
+    CLADE_DB_HOST:          mariadb
+    CLADE_DB_USER:          root
+    CLADE_DB_NAME:          clade_test
+    CLADE_DB_PASSWORD:      "$CLADE_DB_PASSWORD"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq libmariadb-dev pkg-config mariadb-client
+    - pip install --quiet uv
+    - uv pip install --system tox tox-uv
+    - |
+      ready=0
+      for i in $(seq 1 30); do
+        if mariadb --protocol=tcp -h mariadb -u root -p"$CLADE_DB_PASSWORD" \
+             -e "SELECT VERSION() AS server, @@character_set_server AS charset, @@collation_server AS collation;"; then
+          ready=1
+          break
+        fi
+        sleep 2
+      done
+      [ "$ready" = 1 ]
+  script:
+    - tox -e integration-mariadb-ci
+
 # ─── Stage: cover ─────────────────────────────────────────────────────────────
 # Coverage report generation and Codecov upload.
 # Runs on main branch (push and MR) and on all version tags.
@@ -341,6 +400,7 @@ build:package:
     - test:py312
     - test:py313
     - integrate:postgresql
+    - integrate:mariadb
     - cover:py312
   before_script:
     - pip install build packaging

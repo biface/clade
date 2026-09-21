@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] — 2026-09-21
+
+### Added
+- MariaDB as a CI-verified backend — the tree/kinship fallback path and
+  Affinity now run against a real second engine, not only SQLite; no API,
+  schema or runtime change (DD-019)
+- Affinity concept guide (`concepts/affinity.md`) documents MariaDB's
+  case-insensitive default collation on `Affinity.channel`/`value` and the
+  deployer-side fix (DD-019)
+
+References:
+* [DD-019](https://gitlab.com/open-works/clade/-/work_items/100)
+
+---
+
 ## [0.6.0] — 2026-09-02
 
 ### Added
@@ -181,7 +196,8 @@ References:
 
 ---
 
-[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.6.0...HEAD
+[Unreleased]: https://gitlab.com/open-works/clade/-/compare/v0.7.0...HEAD
+[0.7.0]: https://gitlab.com/open-works/clade/-/releases/v0.7.0
 [0.6.0]: https://gitlab.com/open-works/clade/-/releases/v0.6.0
 [0.5.0]: https://gitlab.com/open-works/clade/-/releases/v0.5.0
 [0.4.0]: https://gitlab.com/open-works/clade/-/releases/v0.4.0

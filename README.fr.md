@@ -13,13 +13,14 @@
 
 ## Statut
 
-**Pré-alpha** — `v0.6.0` publié. L'API n'est pas encore stable.
+**Pré-alpha** — `v0.7.0` publié. L'API n'est pas encore stable.
 
 | Version | Statut | Contenu                                                                                                 |
 |---|---|---------------------------------------------------------------------------------------------------------|
 | `v0.4.0` | ✅ Publiée | Parenté étendue (pibling, nibling, cousin — degré symétrique)                                           |
 | `v0.5.0` | ✅ Publiée | Modèle Affinité & décision de stockage ([DD-005](https://gitlab.com/open-works/clade/-/work_items/5))   |
-| `v0.6.0` | ✅ Actuelle | Transitivité et cohérence de l'Affinité ([DD-018](https://gitlab.com/open-works/clade/-/work_items/88)) |
+| `v0.6.0` | ✅ Publiée | Transitivité et cohérence de l'Affinité ([DD-018](https://gitlab.com/open-works/clade/-/work_items/88)) |
+| `v0.7.0` | ✅ Actuelle | Backend MariaDB vérifié en CI ([DD-019](https://gitlab.com/open-works/clade/-/work_items/100))          |
 
 Voir les [jalons](https://gitlab.com/open-works/clade/-/milestones) et les
 [issues](https://gitlab.com/open-works/clade/-/issues) sur GitLab pour la
@@ -42,6 +43,8 @@ par conception, déclarée via `Meta.affinity_rules` *(v0.5.0)*.
 Le module cible plusieurs moteurs de base de données :
 - **PostgreSQL** avec `ltree` — optimisation native *(v0.3.0)*
 - **SQLite / autres** — implémentation de repli Materialized Path en Django pur *(actuel)*
+- **MariaDB** — vérifié sur ce même chemin de repli, en CI uniquement *(v0.7.0)* ;
+  configuration non exécutable en local par les contributeurs
 
 ---
 
