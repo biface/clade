@@ -6,18 +6,37 @@
 # PostgreSQL (native ltree operators) and SQLite (Django ORM fallback).
 #
 # Run with:
-#   tox -e integration          (local — settings_integration_local.py)
-#   tox -e integration-ci       (CI    — settings_integration.py + env var)
+#   tox -e integration              (local — settings_integration_local.py)
+#   tox -e integration-ci           (CI    — settings_integration.py + env var)
+#   tox -e integration-mariadb-ci   (CI only — MariaDB, DD-019)
 #
 # Marker: @pytest.mark.integration
-# Requires: PostgreSQL ≥ 14 with ltree extension, clade_test database.
+# Requires: PostgreSQL ≥ 14 with ltree extension, clade_test database — or,
+# in the CI-only MariaDB job, a MariaDB server. The three checks in the
+# "Backend verification" section assert PostgreSQL facts (ltree) and skip
+# themselves on any other engine; everything below that section is
+# backend-neutral and runs unmodified on both (DD-019, #103).
 #
-# Refs: DD-003 (#3), DD-011 (#32), DD-013 (#40), DD-015, DD-016 (#56), #63
+# Refs: DD-003 (#3), DD-011 (#32), DD-013 (#40), DD-015, DD-016 (#56), #63,
+#       DD-019 (#100), #103
 # =============================================================================
 
 import pytest
+from django.db import connection
 
 from tests.models import SimpleNode
+
+# ``connection.vendor`` is a class attribute of the backend wrapper: reading it
+# at import time does not open a connection. ("mysql" is Django's vendor id for
+# both MySQL and MariaDB — see test_mariadb_backend_active below.)
+requires_postgresql = pytest.mark.skipif(
+    connection.vendor != "postgresql",
+    reason="PostgreSQL-specific check (ltree) — skipped on other backends (DD-019)",
+)
+requires_mysql_family = pytest.mark.skipif(
+    connection.vendor != "mysql",
+    reason="MariaDB-specific check — runs only in the CI-only MariaDB job (DD-019)",
+)
 
 # =============================================================================
 # Reference tree fixture
@@ -86,10 +105,9 @@ def pg_kinship_tree(db):
 
 
 @pytest.mark.integration
+@requires_postgresql
 def test_postgresql_backend_active(db):
     """Confirm the active backend is PostgreSQL with ltree support."""
-    from django.db import connection
-
     assert connection.vendor == "postgresql", (
         f"Expected postgresql backend, got {connection.vendor}. "
         "Check DJANGO_SETTINGS_MODULE."
@@ -97,10 +115,9 @@ def test_postgresql_backend_active(db):
 
 
 @pytest.mark.integration
+@requires_postgresql
 def test_ltree_extension_enabled(db):
     """Confirm the ltree extension is installed on the test database."""
-    from django.db import connection
-
     with connection.cursor() as cursor:
         cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'ltree';")
         result = cursor.fetchone()
@@ -112,10 +129,9 @@ def test_ltree_extension_enabled(db):
 
 
 @pytest.mark.integration
+@requires_postgresql
 def test_path_field_type_is_ltree(db):
     """Confirm CladeNode.path is stored as ltree on PostgreSQL."""
-    from django.db import connection
-
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT data_type
@@ -129,6 +145,25 @@ def test_path_field_type_is_ltree(db):
     assert (
         result[0] == "USER-DEFINED"
     ), f"Expected ltree (USER-DEFINED) column type, got {result[0]}."
+
+
+@pytest.mark.integration
+@requires_mysql_family
+def test_mariadb_backend_active(db):
+    """Confirm the MariaDB job really runs on MariaDB.
+
+    Django reports the same ``vendor`` ("mysql") for MySQL and MariaDB, so the
+    engine is checked through ``mysql_is_mariadb`` — evaluated here, inside the
+    test, because it queries the server (it needs the test database, so it
+    cannot be a collection-time ``skipif``). Without this test a misconfigured
+    job could pass on the wrong engine now that the PostgreSQL checks skip
+    themselves (DD-019).
+    """
+    assert connection.vendor == "mysql"
+    assert getattr(connection, "mysql_is_mariadb", False), (
+        "Expected a MariaDB server, got MySQL. "
+        "The integrate:mariadb job must run against a mariadb image."
+    )
 
 
 # =============================================================================

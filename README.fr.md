@@ -42,6 +42,8 @@ par conception, déclarée via `Meta.affinity_rules` *(v0.5.0)*.
 Le module cible plusieurs moteurs de base de données :
 - **PostgreSQL** avec `ltree` — optimisation native *(v0.3.0)*
 - **SQLite / autres** — implémentation de repli Materialized Path en Django pur *(actuel)*
+- **MariaDB** — vérifié sur ce même chemin de repli, en CI uniquement *(v0.7.0)* ;
+  configuration non exécutable en local par les contributeurs
 
 ---
 
