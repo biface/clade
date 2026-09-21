@@ -15,8 +15,9 @@
 # PostgreSQL would test nothing that SQLite doesn't already cover.
 #
 # Run with:
-#   tox -e integration          (local — settings_integration_local.py)
-#   tox -e integration-ci       (CI    — settings_integration.py + env var)
+#   tox -e integration              (local — settings_integration_local.py)
+#   tox -e integration-ci           (CI    — settings_integration.py + env var)
+#   tox -e integration-mariadb-ci   (CI only — MariaDB, DD-019: runs unmodified)
 #
 # Marker: @pytest.mark.integration
 # Requires: PostgreSQL ≥ 14, clade_test database (ltree not required by
