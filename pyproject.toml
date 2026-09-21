@@ -150,12 +150,13 @@ addopts                = [
     "--import-mode=importlib",
     "--no-migrations",    # tables created directly from models (fast)
                           # migration validation: tox -e migrations (staging MR)
-    "-m", "not integration",  # integration tests require PostgreSQL — run via tox -e integration
+    "-m", "not integration",  # integration tests need a real engine — tox -e integration
+                          # (PostgreSQL) or the CI-only integration-mariadb-ci
     "-v",
 ]
 markers = [
     "django_db: marks tests requiring database access (deselect with '-m not django_db')",
-    "integration: marks tests requiring real PostgreSQL — local only until v1.0.0 (DD-011)",
+    "integration: marks tests requiring a real database engine — PostgreSQL (DD-011) or MariaDB (CI only, DD-019)",
 ]
 
 
@@ -373,12 +374,13 @@ commands            = [
 ]
 
 # =============================================================================
-# Integration tests (local only until v1.0.0 — DD-011)
+# Integration tests (PostgreSQL local until v1.0.0 — DD-011; MariaDB CI-only — DD-019)
 #
-# integration     — local development, credentials in settings_integration_local.py
-# integration-ci  — CI pipeline, password injected via CLADE_DB_PASSWORD env var
+# integration                — local development, credentials in settings_integration_local.py
+# integration-ci             — CI pipeline (PostgreSQL), password via CLADE_DB_PASSWORD env var
+# integration-mariadb-ci     — CI pipeline (MariaDB), CI only: no local counterpart by design
 #
-# Refs: DD-011 (#32)
+# Refs: DD-011 (#32), DD-019 (#100)
 # =============================================================================
 
 [tool.tox.env.integration]
@@ -396,6 +398,17 @@ description         = "Integration tests — CI (password via CLADE_DB_PASSWORD 
 base_python         = "python3.12"
 deps                = ["-r {toxinidir}/.tox-config/requirements/integration.txt"]
 setenv              = { DJANGO_SETTINGS_MODULE = "tests.settings_integration" }
+passenv             = ["CLADE_DB_NAME", "CLADE_DB_USER", "CLADE_DB_PASSWORD", "CLADE_DB_HOST", "CLADE_DB_PORT"]
+allowlist_externals = ["bash"]
+commands            = [
+    ["bash", "-c", "pytest -m integration -v || [ $? -eq 5 ]"],
+]
+
+[tool.tox.env.integration-mariadb-ci]
+description         = "Integration tests — MariaDB, CI ONLY (no local counterpart, DD-019)"
+base_python         = "python3.12"
+deps                = ["-r {toxinidir}/.tox-config/requirements/integration-mariadb.txt"]
+setenv              = { DJANGO_SETTINGS_MODULE = "tests.settings_integration_mariadb" }
 passenv             = ["CLADE_DB_NAME", "CLADE_DB_USER", "CLADE_DB_PASSWORD", "CLADE_DB_HOST", "CLADE_DB_PORT"]
 allowlist_externals = ["bash"]
 commands            = [
