@@ -40,6 +40,8 @@ design, declared via `Meta.affinity_rules` *(v0.5.0)*.
 The module targets multiple database backends:
 - **PostgreSQL** with `ltree` — native optimisation *(v0.3.0)*
 - **SQLite / other** — pure-Django Materialized Path fallback *(current)*
+- **MariaDB** — verified against the same fallback path in CI only *(v0.7.0)*;
+  not a configuration contributors can run locally
 
 ---
 
