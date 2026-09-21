@@ -1,0 +1,7 @@
+-r base.django.txt
+# MariaDB/MySQL driver — CI-only integration environment (DD-019).
+# Kept apart from integration.txt so the PostgreSQL environment does not
+# install a MySQL driver, and this one does not install psycopg2.
+# mysqlclient compiles at install time: it needs libmariadb-dev and
+# pkg-config on the build machine (installed by the integrate:mariadb job).
+mysqlclient
