@@ -1,0 +1,24 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="pytest:coverage" type="tests" folderName="2 · Other tox environments">
+    <module name="clade" />
+    <option name="INTERPRETER_OPTIONS" value="" />
+    <option name="PARENT_ENVS" value="true" />
+    <envs>
+      <env name="DJANGO_SETTINGS_MODULE" value="tests.settings" />
+    </envs>
+    <option name="SDK_HOME" value="$PROJECT_DIR$/.venv/bin/python" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="IS_MODULE_SDK" value="false" />
+    <option name="ADD_CONTENT_ROOTS" value="true" />
+    <option name="ADD_SOURCE_ROOTS" value="true" />
+    <EXTENSION ID="coverage" enabled="true" merge="false" runner="coverage.py">
+      <option name="runner" value="coverage.py" />
+    </EXTENSION>
+    <option name="_new_additionalArguments" value="--cov=clade --cov-report=term-missing -m &quot;not integration&quot;" />
+    <option name="_new_pattern" value="test_*.py" />
+    <option name="_new_scriptName" value="$PROJECT_DIR$/tests" />
+    <option name="_new_targetType" value="PATH" />
+    <option name="_new_workingDirectory" value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

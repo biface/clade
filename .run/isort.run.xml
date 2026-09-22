@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="isort" type="ShConfigurationType" folderName="2 · Other tox environments">
+    <option name="SCRIPT_TEXT" value="" />
+    <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+    <option name="SCRIPT_PATH" value="$PROJECT_DIR$/.venv/bin/tox" />
+    <option name="SCRIPT_OPTIONS" value="-e isort" />
+    <option name="INDEPENDENT_WORKING_DIRECTORY" value="false" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="EXECUTE_IN_TERMINAL" value="true" />
+    <option name="EXECUTE_SCRIPT_FILE" value="true" />
+    <method v="2" />
+  </configuration>
+</component>
