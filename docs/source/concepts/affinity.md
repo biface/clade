@@ -1,4 +1,4 @@
-# Affinity
+  # Affinity
 
 Affinity is Clade's non-hierarchical counterpart to the tree: a relationship
 between two nodes that share an attribute value, with **no** parent/child
@@ -236,42 +236,48 @@ that a channel maps to exactly one partner model.
   `AffinityRule` explicitly names get materialised, exactly as before.
 
 ## Database backends and case sensitivity
-
+ 
 Affinity has no backend-specific code: its storage (`ContentType` generic
 foreign keys, plain `CharField`s, ordinary B-tree indexes) and its closure
 engine run the same way on SQLite, PostgreSQL and MariaDB. MariaDB is
 verified in CI only, not in contributors' local setups.
-
+ 
 There is one behaviour you should know about if you deploy on MariaDB.
-MariaDB's usual default collations are case-insensitive, unlike the default
-text comparison on SQLite and PostgreSQL. Clade sets no `db_collation` on
-`Affinity.channel` or `Affinity.value`, so on such a database `"Paris"` and
-`"paris"` match as equal, where the same data stays distinct elsewhere.
-This is scoped to exactly those two columns of the single `Affinity` table.
-
+MariaDB's usual default collations do not compare text the way SQLite and
+PostgreSQL do. The collation confirmed by the CI job on `mariadb:11.4`
+(`utf8mb4_uca1400_ai_ci`) is both **case-insensitive and
+accent-insensitive**: `"Paris"`, `"paris"` and `"Pâris"` all match as
+equal there, where the same three values stay distinct on SQLite and
+PostgreSQL. Older MariaDB default collations (`utf8mb4_general_ci`) are
+case-insensitive only, without the accent-folding — which collation you
+get depends on the server version and configuration, not on `clade`.
+Clade sets no `db_collation` on `Affinity.channel` or `Affinity.value`,
+so on such a database this affects exactly those two columns of the
+single `Affinity` table.
+ 
 Clade does not change this for you and does not check for it: which
-collation a database uses is a decision for whoever provisions that database,
-and a portable check could not reliably read a server's actual configuration.
-If you need case-sensitive matching, run the DDL yourself, outside Clade's
-migrations, in any one of these ways:
-
+collation a database uses is a decision for whoever provisions that
+database, and a portable check could not reliably read a server's actual
+configuration. If you need case- and accent-sensitive matching, run the
+DDL yourself, outside Clade's migrations, in any one of these ways:
+ 
 ```sql
 -- Change only the two affected columns:
 ALTER TABLE clade_affinity
     MODIFY channel VARCHAR(255) NOT NULL COLLATE utf8mb4_bin,
     MODIFY value   VARCHAR(255) NOT NULL COLLATE utf8mb4_bin;
-
+ 
 -- Or convert the whole table:
 ALTER TABLE clade_affinity CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 ```
-
-You can also choose a case-sensitive default collation for the database
-before the first migration runs.
-
+ 
+You can also choose a case- and accent-sensitive default collation for
+the database before the first migration runs.
+ 
 ```{warning}
-`MODIFY` redefines the whole column. If you leave out `NOT NULL`, the column
-silently becomes nullable. The first statement above restates it for that
-reason.
+`MODIFY` redefines the whole column. If you leave out `NOT NULL`, the
+column silently becomes nullable. The first statement above restates it
+for that reason.
 ```
 
 ## Where to go next
